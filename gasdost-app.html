@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GasDost</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0b1210;
+    --panel:#0f1a17;
+    --panel-edge:#1c2b26;
+    --panel-edge-soft:#243832;
+    --route:#38e07b;
+    --route-dim:#1d5c3d;
+    --text:#eaf5ee;
+    --text-dim:#7fa392;
+    --accent:#ff8a3d;
+    --accent-dim:#5a3a20;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--ink);}
+  body{
+    font-family:'Noto Sans', 'Noto Sans Devanagari', 'Helvetica Neue', Arial, sans-serif;
+    color:var(--text);
+    display:flex;
+    justify-content:center;
+  }
+  #app{
+    width:100%;
+    max-width:420px;
+    height:100vh;
+    display:flex;
+    flex-direction:column;
+    position:relative;
+    overflow:hidden;
+    background:var(--ink);
+  }
+  .screen{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column;
+    transform:translateX(100%);
+    transition:transform 0.35s ease;
+    background:var(--ink);
+  }
+  .screen.active{transform:translateX(0);}
+  .screen.exit-left{transform:translateX(-100%);}
+
+  header.top{
+    padding:20px 20px 14px;
+    border-bottom:1px solid var(--panel-edge);
+  }
+  header.top .eyebrow{
+    font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim);
+  }
+  header.top h1{
+    margin:4px 0 0; font-size:21px; font-weight:700;
+  }
+
+  .content{flex:1; overflow-y:auto; padding:18px 20px 100px;}
+
+  /* --- Booking screen --- */
+  .field-label{
+    font-size:11.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-dim);
+    margin:20px 0 10px;
+  }
+  .field-label:first-child{margin-top:0;}
+
+  .option-grid{display:flex; gap:10px; flex-wrap:wrap;}
+  .option-card{
+    flex:1; min-width:80px; border:1px solid var(--panel-edge); background:var(--panel);
+    border-radius:12px; padding:14px 12px; cursor:pointer;
+    transition:border-color 0.15s, background 0.15s;
+  }
+  .option-card.selected{border-color:var(--route); background:rgba(56,224,123,0.08);}
+  .option-card .icon{font-size:22px;}
+  .option-card .name{font-weight:700; font-size:14px; margin-top:6px;}
+  .option-card .sub{font-size:11.5px; color:var(--text-dim); margin-top:2px;}
+
+  .stepper{
+    display:flex; align-items:center; gap:14px;
+    background:var(--panel); border:1px solid var(--panel-edge); border-radius:12px;
+    padding:10px 16px; width:fit-content;
+  }
+  .stepper button{
+    width:30px; height:30px; border-radius:8px; border:1px solid var(--panel-edge-soft);
+    background:transparent; color:var(--text); font-size:16px; cursor:pointer;
+  }
+  .stepper span{font-size:16px; font-weight:700; min-width:16px; text-align:center;}
+
+  .address-card{
+    background:var(--panel); border:1px solid var(--panel-edge); border-radius:12px;
+    padding:14px 16px; display:flex; gap:12px; align-items:flex-start;
+  }
+  .address-card .pin{font-size:18px;}
+  .address-card .lines b{display:block; font-size:14px;}
+  .address-card .lines span{font-size:12.5px; color:var(--text-dim); line-height:1.4;}
+
+  .pay-row{display:flex; gap:10px; flex-wrap:wrap;}
+  .pay-chip{
+    border:1px solid var(--panel-edge); background:var(--panel); border-radius:20px;
+    padding:8px 16px; font-size:13px; cursor:pointer;
+  }
+  .pay-chip.selected{border-color:var(--accent); color:var(--accent); background:rgba(255,138,61,0.1);}
+
+  .summary-row{
+    display:flex; justify-content:space-between; font-size:13.5px; padding:8px 0;
+    border-bottom:1px solid var(--panel-edge);
+  }
+  .summary-row.total{font-weight:700; font-size:15px; border-bottom:none; padding-top:12px;}
+  .summary-row .dim{color:var(--text-dim);}
+  .cart-item{
+    display:flex; align-items:center; gap:10px;
+    background:var(--panel); border:1px solid var(--panel-edge); border-radius:12px;
+    padding:10px 12px; margin-bottom:8px;
+  }
+  .cart-item .cart-info{flex:1; min-width:0;}
+  .cart-item .cart-name{font-weight:700; font-size:13.5px;}
+  .cart-item .cart-sub{font-size:11.5px; color:var(--text-dim); margin-top:1px;}
+  .cart-item .cart-price{font-weight:700; font-size:13.5px; white-space:nowrap;}
+  .cart-item .cart-remove{
+    background:none; border:none; color:#ff6b6b; font-size:18px; cursor:pointer; padding:2px 4px; line-height:1;
+  }
+  .addr-row{
+    display:flex; align-items:center; gap:10px;
+    background:var(--panel); border:1px solid var(--panel-edge); border-radius:12px;
+    padding:12px 14px; margin-bottom:8px; cursor:pointer;
+  }
+  .addr-row .addr-info{flex:1; min-width:0;}
+  .addr-row .addr-label{font-weight:700; font-size:13.5px;}
+  .addr-row .addr-text{font-size:12px; color:var(--text-dim); margin-top:2px; line-height:1.4;}
+  .addr-row .addr-remove{
+    background:none; border:none; color:#ff6b6b; font-size:16px; cursor:pointer; padding:2px 6px; line-height:1; flex-shrink:0;
+  }
+  .order-row{
+    background:var(--panel); border:1px solid var(--panel-edge); border-radius:12px;
+    padding:12px 14px; margin-bottom:8px;
+  }
+  .order-row .order-top{display:flex; justify-content:space-between; align-items:baseline;}
+  .order-row .order-date{font-size:11px; color:var(--text-dim);}
+  .order-row .order-items{font-size:12.5px; margin-top:4px; line-height:1.4;}
+  .order-row .order-total{font-weight:700; font-size:13.5px; margin-top:6px;}
+  .order-row .reorder-btn{
+    margin-top:8px; width:100%; padding:8px; border:1px solid var(--panel-edge-soft); border-radius:8px;
+    background:transparent; color:var(--route); font-weight:600; font-size:12.5px; cursor:pointer;
+  }
+
+  .bottom-bar{
+    position:absolute; bottom:0; left:0; right:0;
+    padding:16px 20px 20px;
+    background:linear-gradient(to top, var(--ink) 60%, transparent);
+  }
+  .btn-primary{
+    width:100%; padding:15px; border:none; border-radius:12px;
+    background:var(--route); color:#06130c; font-weight:700; font-size:15px;
+    cursor:pointer;
+  }
+  .btn-primary:active{transform:scale(0.98);}
+  .btn-secondary{
+    width:100%; padding:14px; border:1px solid var(--panel-edge-soft); border-radius:12px;
+    background:transparent; color:var(--text); font-weight:600; font-size:14px; cursor:pointer; margin-top:10px;
+  }
+
+  /* --- Confirmation screen --- */
+  .confirm-wrap{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:24px 24px 100px; overflow-y:auto;
+  }
+  .confirm-icon{
+    width:64px; height:64px; border-radius:50%; background:rgba(56,224,123,0.12);
+    display:flex; align-items:center; justify-content:center; font-size:30px; margin-bottom:18px;
+    border:1px solid var(--route-dim);
+  }
+  .confirm-wrap h2{margin:0 0 8px; font-size:19px;}
+  .confirm-wrap p{margin:0; font-size:13.5px; color:var(--text-dim); line-height:1.5;}
+  .order-id{
+    margin-top:16px; font-size:12px; letter-spacing:0.08em; color:var(--text-dim);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:6px 14px;
+  }
+
+  /* --- Tracking screen (map) --- */
+  #map{flex:1;filter:grayscale(0.15) brightness(0.9);}
+  .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);}
+  #hud{
+    position:absolute; top:66px; left:16px; z-index:1000;
+    background:rgba(15,26,23,0.85); border:1px solid var(--panel-edge); border-radius:10px;
+    padding:8px 12px; backdrop-filter: blur(6px); font-size:11.5px;
+    letter-spacing:0.05em; text-transform:uppercase; color:var(--text-dim);
+  }
+  #hud b{color:var(--route); font-size:12.5px;}
+  .track-panel{
+    background:var(--panel); border-top:1px solid var(--panel-edge);
+    padding:16px 20px 20px; display:flex; align-items:center; gap:14px;
+  }
+  .avatar{
+    width:44px;height:44px;border-radius:50%;
+    background:linear-gradient(145deg, var(--accent), #d9601a);
+    display:flex;align-items:center;justify-content:center; font-size:19px; flex-shrink:0;
+  }
+  .info{flex:1; min-width:0;}
+  .info .name{font-weight:700; font-size:14.5px;}
+  .info .status{font-size:12px; color:var(--text-dim); margin-top:2px;}
+  .eta{text-align:right;}
+  .eta .num{font-size:24px; font-weight:700; color:var(--route); line-height:1;}
+  .eta .label{font-size:10px; color:var(--text-dim); letter-spacing:0.1em; text-transform:uppercase; margin-top:2px;}
+  .progress-track{height:4px; background:var(--panel-edge); border-radius:2px; overflow:hidden; margin-top:8px;}
+  .progress-fill{height:100%; width:0%; background:var(--route); transition:width 0.4s linear;}
+  .pulse-dot{
+    width:16px;height:16px;border-radius:50%; background:var(--route);
+    box-shadow:0 0 0 0 rgba(56,224,123,0.6); animation:pulse 1.6s infinite; border:2px solid #fff;
+  }
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(56,224,123,0.55);}
+    70%{box-shadow:0 0 0 14px rgba(56,224,123,0);}
+    100%{box-shadow:0 0 0 0 rgba(56,224,123,0);}
+  }
+  .rider-icon{font-size:22px; filter: drop-shadow(0 0 6px rgba(56,224,123,0.8)); transition: transform 0.2s; position:relative; display:inline-block;}
+  .cyl-badge{position:absolute; top:-8px; right:-10px; font-size:11px;}
+
+  /* --- Delivered screen --- */
+  .receipt{
+    background:var(--panel); border:1px solid var(--panel-edge); border-radius:14px;
+    padding:20px; margin-top:10px;
+  }
+  .receipt h3{margin:0 0 4px; font-size:15px;}
+  .receipt .sub{font-size:12px; color:var(--text-dim); margin-bottom:14px;}
+  .otp-box{
+    width:56px; height:60px; text-align:center; font-size:24px; font-weight:700;
+    background:var(--panel); border:1px solid var(--panel-edge); border-radius:12px; color:var(--text);
+    font-family:inherit;
+  }
+  .otp-box:focus{outline:none; border-color:var(--route);}
+  .rate-row{display:flex; gap:8px; margin-top:16px;}
+  .star{font-size:26px; cursor:pointer; opacity:0.35;}
+  .star.filled{opacity:1;}
+  #langToggle{
+    position:absolute; top:14px; right:14px; z-index:2000;
+    background:rgba(15,26,23,0.85); border:1px solid var(--panel-edge-soft);
+    border-radius:20px; padding:6px 4px; display:flex; gap:2px;
+    backdrop-filter: blur(6px);
+  }
+  #langToggle button{
+    border:none; background:transparent; color:var(--text-dim);
+    font-size:12px; font-weight:700; padding:5px 12px; border-radius:16px; cursor:pointer;
+  }
+  #langToggle button.active{background:var(--route); color:#06130c;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="langToggle">
+    <button id="btnLangEn" class="active" onclick="setLanguage('en')">English</button>
+    <button id="btnLangHi" onclick="setLanguage('hi')">हिंदी</button>
+  </div>
+
+
+  <!-- SCREEN 0: WHATSAPP ENTRY POINT -->
+  <div class="screen active" id="screen-whatsapp" style="background:#0b141a;">
+    <div style="background:#202c33; padding:14px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid #2a3942;">
+      <div style="width:38px;height:38px;border-radius:50%;background:#25d366;display:flex;align-items:center;justify-content:center;font-size:18px;">🔥</div>
+      <div>
+        <div style="font-weight:700; font-size:15px; color:#e9edef;">GasDost</div>
+        <div style="font-size:11.5px; color:#8696a0;">Business Account · online</div>
+      </div>
+    </div>
+    <div style="flex:1; padding:16px; display:flex; flex-direction:column; justify-content:flex-end; gap:8px;">
+      <div style="align-self:flex-start; max-width:82%; background:#202c33; color:#e9edef; padding:10px 12px; border-radius:2px 10px 10px 10px; font-size:13.5px; line-height:1.5;">
+        <span data-i18n="wa_greeting">Hi! 👋 Welcome to GasDost. Tap below to book your LPG cylinder refill — it only takes a minute.</span>
+        <div style="font-size:10px; color:#8696a0; text-align:right; margin-top:4px;">9:41 AM</div>
+      </div>
+      <button onclick="launchFromWhatsApp()" style="align-self:flex-start; background:#202c33; border:1px solid #2a3942; color:#00a5f4; font-weight:600; font-size:13.5px; padding:10px 16px; border-radius:8px; cursor:pointer; display:flex; align-items:center; gap:8px;">
+        🔗 <span data-i18n="wa_book_btn">Book on GasDost</span>
+      </button>
+    </div>
+    <div style="padding:12px 16px 18px; background:#202c33; border-top:1px solid #2a3942; font-size:11px; color:#8696a0; text-align:center;">
+      <span data-i18n="wa_opens_browser">Opens GasDost in your browser</span> · gasdost.app
+    </div>
+  </div>
+
+  <!-- SCREEN 0B: PHONE LOGIN -->
+  <div class="screen" id="screen-login">
+    <header class="top">
+      <div class="eyebrow">GasDost</div>
+      <h1 data-i18n="login_title">Log in to continue</h1>
+    </header>
+    <div class="content">
+      <div class="field-label" data-i18n="mobile_label">Mobile number</div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <div style="background:var(--panel); border:1px solid var(--panel-edge); border-radius:12px; padding:14px 14px; font-size:14px; color:var(--text-dim);">🇮🇳 +91</div>
+        <input id="phoneInput" type="tel" maxlength="10" placeholder="98765 43210"
+          style="flex:1; background:var(--panel); border:1px solid var(--panel-edge); border-radius:12px; color:var(--text); font-size:15px; padding:14px 14px; font-family:inherit;">
+      </div>
+      <p style="font-size:12px; color:var(--text-dim); margin-top:14px; line-height:1.5;" data-i18n="otp_disclaimer">
+        We'll text a 4-digit code to verify it's you. Standard message rates may apply.
+      </p>
+    </div>
+    <div class="bottom-bar">
+      <button class="btn-primary" onclick="sendOtp()" data-i18n="send_otp_btn">Send OTP</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 0C: OTP VERIFICATION -->
+  <div class="screen" id="screen-otp">
+    <header class="top">
+      <div class="eyebrow">GasDost</div>
+      <h1 data-i18n="otp_title">Enter OTP</h1>
+    </header>
+    <div class="content">
+      <p style="font-size:13px; color:var(--text-dim); margin-top:0;">
+        <span data-i18n="otp_sent_to">Code sent via SMS to</span> <span id="otpPhoneDisplay" style="color:var(--text); font-weight:600;">+91 98765 43210</span>
+      </p>
+      <div style="display:flex; gap:10px; margin-top:18px;">
+        <input class="otp-box" maxlength="1" inputmode="numeric">
+        <input class="otp-box" maxlength="1" inputmode="numeric">
+        <input class="otp-box" maxlength="1" inputmode="numeric">
+        <input class="otp-box" maxlength="1" inputmode="numeric">
+      </div>
+      <div id="otpError" style="color:#ff6b6b; font-size:12.5px; margin-top:12px; display:none;" data-i18n="otp_error">Incorrect code. Try again.</div>
+      <div style="margin-top:20px; font-size:13px; color:var(--text-dim);">
+        <span data-i18n="otp_no_code">Didn't get it?</span> <span id="resendLink" style="color:var(--route); cursor:pointer;" onclick="resendOtp()" data-i18n="resend_code">Resend code</span>
+        <span id="resendTimer"></span>
+      </div>
+    </div>
+    <div class="bottom-bar">
+      <button class="btn-primary" onclick="verifyOtp()" data-i18n="verify_btn">Verify & continue</button>
+      <button class="btn-secondary" onclick="showScreen('screen-login')" data-i18n="change_number_btn">Change number</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 1: BOOKING -->
+  <div class="screen" id="screen-booking">
+    <header class="top" style="display:flex; align-items:flex-start; justify-content:space-between;">
+      <div>
+        <div class="eyebrow">GasDost</div>
+        <h1 data-i18n="booking_title">Book your cylinder</h1>
+      </div>
+      <button onclick="goToProfile()" style="background:var(--panel); border:1px solid var(--panel-edge); border-radius:50%; width:38px; height:38px; font-size:17px; cursor:pointer; flex-shrink:0; margin-top:42px;">👤</button>
+    </header>
+    <div class="content">
+      <div class="field-label" data-i18n="choose_distributor">Which Company's Cylinder?</div>
+      <div class="option-grid">
+        <div class="option-card selected" data-group="brand" data-value="hpcl">
+          <div class="name">HP Gas</div>
+          <div class="sub">HPCL</div>
+        </div>
+        <div class="option-card" data-group="brand" data-value="bpcl">
+          <div class="name">Bharatgas</div>
+          <div class="sub">BPCL</div>
+        </div>
+        <div class="option-card" data-group="brand" data-value="iocl">
+          <div class="name">Indane</div>
+          <div class="sub">IOCL</div>
+        </div>
+        <div class="option-card" data-group="brand" data-value="private">
+          <div class="name" data-i18n="private_cylinder">Private</div>
+          <div class="sub" data-i18n="private_sub">Local supplier</div>
+        </div>
+      </div>
+
+      <div class="field-label" data-i18n="cylinder_type">Cylinder type</div>
+      <div class="option-grid">
+        <div class="option-card" data-group="type" data-value="19kg">
+          <svg class="icon" width="22" height="30" viewBox="0 0 24 34" style="display:block;">
+            <rect x="9" y="0" width="6" height="4" rx="1" fill="#8a9298"/>
+            <rect x="2" y="4" width="20" height="6" rx="2" fill="#a9b0b5"/>
+            <rect x="1" y="9" width="22" height="24" rx="5" fill="#c9ced2"/>
+            <rect x="1" y="9" width="22" height="24" rx="5" fill="none" stroke="#8a9298" stroke-width="1"/>
+            <rect x="1" y="27" width="22" height="6" rx="2" fill="#a9b0b5"/>
+          </svg>
+          <div class="name">19 kg</div>
+          <div class="sub">₹2,020</div>
+        </div>
+        <div class="option-card selected" data-group="type" data-value="5kg">
+          <svg class="icon" width="16" height="24" viewBox="0 0 24 34" style="display:block;">
+            <rect x="9" y="0" width="6" height="4" rx="1" fill="#8a9298"/>
+            <rect x="2" y="4" width="20" height="6" rx="2" fill="#a9b0b5"/>
+            <rect x="1" y="9" width="22" height="24" rx="5" fill="#c9ced2"/>
+            <rect x="1" y="9" width="22" height="24" rx="5" fill="none" stroke="#8a9298" stroke-width="1"/>
+            <rect x="1" y="27" width="22" height="6" rx="2" fill="#a9b0b5"/>
+          </svg>
+          <div class="name">5 kg</div>
+          <div class="sub">₹465</div>
+        </div>
+        <div class="option-card" data-group="type" data-value="fiber">
+          <svg class="icon" width="22" height="22" viewBox="0 0 40 40" style="display:block;">
+            <rect x="14" y="4" width="12" height="5" rx="1.5" fill="#8fd3d6"/>
+            <rect x="9" y="9" width="22" height="28" rx="8" fill="#bdeceF"/>
+            <rect x="9" y="9" width="22" height="28" rx="8" fill="none" stroke="#4fb3b8" stroke-width="1.5"/>
+          </svg>
+          <div class="name">Fiber</div>
+          <div class="sub">₹1,110</div>
+        </div>
+      </div>
+
+      <div class="field-label" data-i18n="quantity">Quantity</div>
+      <div class="stepper">
+        <button id="qtyMinus">−</button>
+        <span id="qtyValue">1</span>
+        <button id="qtyPlus">+</button>
+      </div>
+
+      <button class="btn-secondary" style="margin-top:16px;" onclick="addToCart()">➕ <span data-i18n="add_to_cart_btn">Add to Cart</span></button>
+
+      <div class="field-label" data-i18n="your_cart">Your cart</div>
+      <div id="cartList"></div>
+      <div id="cartEmpty" style="font-size:12.5px; color:var(--text-dim); padding:6px 2px;" data-i18n="cart_empty">No items added yet — pick a cylinder above and tap "Add to Cart".</div>
+
+      <div class="field-label" data-i18n="deliver_to">Deliver to</div>
+      <div id="savedAddrChips" class="pay-row" style="margin-bottom:10px;"></div>
+      <div id="bookingMap" style="height:160px; border-radius:12px; overflow:hidden; border:1px solid var(--panel-edge);"></div>
+      <textarea id="addressInput" rows="2" placeholder="Address here, e.g. Flat / house no., street, area, city, PIN code"
+        style="width:100%; margin-top:10px; background:var(--panel); border:1px solid var(--panel-edge); border-radius:12px; color:var(--text); font-size:13.5px; padding:12px 14px; font-family:inherit; resize:none;"></textarea>
+
+      <div class="field-label" data-i18n="payment">Payment</div>
+      <div style="background:var(--panel); border:1px solid var(--panel-edge); border-radius:12px; padding:12px 14px; font-size:13.5px; display:flex; align-items:center; gap:8px;">
+        💵 <span data-i18n="pay_on_delivery">Cash or UPI on Delivery</span>
+      </div>
+
+      <div class="field-label" data-i18n="order_summary">Order summary</div>
+      <div id="summaryLines"></div>
+      <div class="summary-row"><span class="dim" data-i18n="delivery_fee">Delivery fee</span><span>₹0</span></div>
+      <div class="summary-row total"><span data-i18n="total_label">Total</span><span id="sumTotal">₹0</span></div>
+    </div>
+    <div class="bottom-bar">
+      <button class="btn-primary" onclick="goToConfirm()" data-i18n="book_now_btn">Book now</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 2: CONFIRMATION -->
+  <div class="screen" id="screen-confirm">
+    <div class="confirm-wrap">
+      <div class="confirm-icon">✅</div>
+      <h2 data-i18n="booking_confirmed">Booking confirmed</h2>
+      <p data-i18n="confirm_desc">Your distributor has accepted the order. A delivery agent will be assigned shortly.</p>
+      <div class="order-id">ORDER #CYL-48213</div>
+
+      <div style="width:100%; margin-top:22px; background:#111b21; border:1px solid #2a3942; border-radius:12px; padding:14px; text-align:left;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+          <div style="width:26px;height:26px;border-radius:50%;background:#25d366;display:flex;align-items:center;justify-content:center;font-size:13px;">🔥</div>
+          <div style="font-size:12px; color:#8696a0;" data-i18n="sent_to_whatsapp">Sent to your WhatsApp just now</div>
+        </div>
+        <div style="background:#202c33; color:#e9edef; padding:10px 12px; border-radius:2px 10px 10px 10px; font-size:13px; line-height:1.5;">
+          <span data-i18n="wa_confirm_msg">Your GasDost order #CYL-48213 is confirmed 🎉 Arjun will deliver it soon. Tap below to watch it arrive live.</span>
+          <div style="font-size:10px; color:#8696a0; text-align:right; margin-top:4px;">9:42 AM ✓✓</div>
+        </div>
+        <button onclick="goToTrack()" style="width:100%; margin-top:8px; background:#202c33; border:1px solid #2a3942; color:#00a5f4; font-weight:600; font-size:13.5px; padding:10px 14px; border-radius:8px; cursor:pointer;">
+          🔗 <span data-i18n="track_order_btn">Track Order</span>
+        </button>
+      </div>
+    </div>
+    <div class="bottom-bar">
+      <button class="btn-secondary" style="margin-top:0; color:#ff6b6b; border-color:#5a2a2a;" onclick="cancelOrder()" data-i18n="cancel_order_btn">Cancel Order</button>
+      <button class="btn-secondary" onclick="goToBooking()" data-i18n="back_home_btn">Back to home</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 3: TRACKING -->
+  <div class="screen" id="screen-track">
+    <div id="hud">GasDost · <span data-i18n="order_label">Order</span> <b>#CYL-48213</b></div>
+    <div id="map"></div>
+    <div class="track-panel">
+      <div class="avatar">🚚</div>
+      <div class="info">
+        <div class="name" data-i18n="rider_name">Arjun is delivering your cylinder</div>
+        <div class="status" id="statusText" data-i18n="status_enroute">Picked up from distributor · heading your way</div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      </div>
+      <div class="eta">
+        <div class="num" id="etaNum">12</div>
+        <div class="label" data-i18n="min_away">min away</div>
+      </div>
+    </div>
+    <div style="padding:12px 16px 16px; background:var(--panel); border-top:1px solid var(--panel-edge);">
+      <button class="btn-secondary" style="margin-top:0; width:100%; color:#ff6b6b; border-color:#5a2a2a;" onclick="cancelOrder()" data-i18n="cancel_order_btn">Cancel Order</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 4: DELIVERED -->
+  <div class="screen" id="screen-delivered">
+    <header class="top">
+      <div class="eyebrow" data-i18n="delivered_eyebrow">GasDost · Delivered</div>
+      <h1 data-i18n="delivered_title">Cylinder delivered</h1>
+    </header>
+    <div class="content">
+      <div class="receipt">
+        <h3><span data-i18n="order_label">Order</span> #CYL-48213</h3>
+        <div class="sub" id="receiptSub">Delivered today · 5 kg × 1</div>
+        <div class="summary-row"><span class="dim" data-i18n="cylinder_label">Cylinder</span><span id="receiptCylPrice">₹465</span></div>
+        <div class="summary-row"><span class="dim" data-i18n="delivery_fee">Delivery fee</span><span>₹0</span></div>
+        <div class="summary-row total"><span data-i18n="paid_cash">Paid (Cash)</span><span id="receiptTotal">₹465</span></div>
+        <div class="field-label" style="margin-top:20px;" data-i18n="rate_delivery">Rate your delivery</div>
+        <div class="rate-row" id="rateRow">
+          <span class="star" data-v="1">★</span>
+          <span class="star" data-v="2">★</span>
+          <span class="star" data-v="3">★</span>
+          <span class="star" data-v="4">★</span>
+          <span class="star" data-v="5">★</span>
+        </div>
+      </div>
+    </div>
+    <div class="bottom-bar">
+      <button class="btn-primary" onclick="goToBooking()" data-i18n="book_another_btn">Book another</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 5: PROFILE -->
+  <div class="screen" id="screen-profile">
+    <header class="top" style="display:flex; align-items:flex-start; justify-content:space-between;">
+      <div>
+        <div class="eyebrow">GasDost</div>
+        <h1 data-i18n="profile_title">Your profile</h1>
+      </div>
+      <button onclick="showScreen('screen-booking')" style="background:var(--panel); border:1px solid var(--panel-edge); border-radius:50%; width:38px; height:38px; font-size:16px; cursor:pointer; flex-shrink:0; margin-top:42px;">✕</button>
+    </header>
+    <div class="content">
+      <div class="field-label" data-i18n="saved_addresses">Saved addresses</div>
+      <div id="savedAddressList"></div>
+      <button class="btn-secondary" style="margin-top:0;" onclick="goToAddAddress()" id="addAddressBtn">➕ <span data-i18n="add_address_btn">Add address</span></button>
+
+      <div class="field-label" data-i18n="order_history">Order history</div>
+      <div id="orderHistoryList"></div>
+      <div id="orderHistoryEmpty" style="font-size:12.5px; color:var(--text-dim); padding:6px 2px;" data-i18n="no_orders_yet">No past orders yet.</div>
+    </div>
+    <div class="bottom-bar">
+      <button class="btn-secondary" style="margin-top:0;" onclick="showScreen('screen-booking')" data-i18n="back_home_btn">Back to home</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 5B: ADD ADDRESS -->
+  <div class="screen" id="screen-add-address">
+    <header class="top">
+      <div class="eyebrow">GasDost</div>
+      <h1 data-i18n="add_address_title">Add new address</h1>
+    </header>
+    <div id="addAddressMap" style="flex:1;"></div>
+    <div class="content" style="flex:none; padding-top:16px; padding-bottom:110px;">
+      <div class="field-label" data-i18n="pin_location">Pin location</div>
+      <p style="font-size:12px; color:var(--text-dim); margin:-4px 0 0;" data-i18n="drag_pin_hint">Drag the pin on the map to your exact location.</p>
+
+      <div class="field-label" data-i18n="address_label">Address label</div>
+      <div class="pay-row">
+        <div class="pay-chip selected" data-group="new-label" data-value="Home" data-i18n="label_home">Home</div>
+        <div class="pay-chip" data-group="new-label" data-value="Work" data-i18n="label_work">Work</div>
+        <div class="pay-chip" data-group="new-label" data-value="Other" data-i18n="label_other">Other</div>
+      </div>
+
+      <div class="field-label" data-i18n="full_address">Full address</div>
+      <textarea id="newAddressText" rows="3" placeholder="Flat / house no., street, area, city, PIN code"
+        style="width:100%; background:var(--panel); border:1px solid var(--panel-edge); border-radius:12px; color:var(--text); font-size:13.5px; padding:12px 14px; font-family:inherit; resize:none;"></textarea>
+    </div>
+    <div class="bottom-bar">
+      <button class="btn-primary" onclick="confirmAddAddress()" data-i18n="save_address_btn">Save address</button>
+      <button class="btn-secondary" onclick="goToProfile()" data-i18n="cancel_btn">Cancel</button>
+    </div>
+  </div>
+
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+  // ---------- Booking screen interactivity (cart-based) ----------
+  const prices = { '19kg': 2020, '5kg': 465, fiber: 1110 };
+  const typeNames = { '19kg': '19 kg', '5kg': '5 kg', fiber: 'Fiber' };
+  const brandNames = { hpcl: 'HP Gas', bpcl: 'Bharatgas', iocl: 'Indane', private: 'Private' };
+  let selectedType = '5kg';
+  let selectedBrand = 'hpcl';
+  let qty = 1;
+  let cart = []; // { brand, type, qty, unitPrice }
+  let savedAddresses = []; // { label, text } — max 5
+  let orderHistory = []; // { id, date, items: [...], total }
+
+  document.querySelectorAll('[data-group="brand"]').forEach(card=>{
+    card.addEventListener('click', ()=>{
+      document.querySelectorAll('[data-group="brand"]').forEach(c=>c.classList.remove('selected'));
+      card.classList.add('selected');
+      selectedBrand = card.dataset.value;
+    });
+  });
+
+  document.querySelectorAll('[data-group="type"]').forEach(card=>{
+    card.addEventListener('click', ()=>{
+      document.querySelectorAll('[data-group="type"]').forEach(c=>c.classList.remove('selected'));
+      card.classList.add('selected');
+      selectedType = card.dataset.value;
+    });
+  });
+  document.getElementById('qtyPlus').addEventListener('click', ()=>{
+    qty = Math.min(qty+1, 5);
+    document.getElementById('qtyValue').textContent = qty;
+  });
+  document.getElementById('qtyMinus').addEventListener('click', ()=>{
+    qty = Math.max(qty-1, 1);
+    document.getElementById('qtyValue').textContent = qty;
+  });
+
+  function addToCart(){
+    const existing = cart.find(item => item.brand === selectedBrand && item.type === selectedType);
+    if(existing){
+      existing.qty += qty;
+    } else {
+      cart.push({ brand: selectedBrand, type: selectedType, qty: qty, unitPrice: prices[selectedType] });
+    }
+    qty = 1;
+    document.getElementById('qtyValue').textContent = qty;
+    renderCart();
+  }
+
+  function removeFromCart(index){
+    cart.splice(index, 1);
+    renderCart();
+  }
+
+  function renderCart(){
+    const listEl = document.getElementById('cartList');
+    const emptyEl = document.getElementById('cartEmpty');
+    const summaryEl = document.getElementById('summaryLines');
+    listEl.innerHTML = '';
+    summaryEl.innerHTML = '';
+
+    if(cart.length === 0){
+      emptyEl.style.display = 'block';
+    } else {
+      emptyEl.style.display = 'none';
+    }
+
+    let total = 0;
+    cart.forEach((item, i)=>{
+      const lineTotal = item.unitPrice * item.qty;
+      total += lineTotal;
+      const brandLabel = brandNames[item.brand];
+      const typeLabel = typeNames[item.type];
+
+      const cartRow = document.createElement('div');
+      cartRow.className = 'cart-item';
+      cartRow.innerHTML = `
+        <div class="cart-info">
+          <div class="cart-name">${typeLabel} · ${brandLabel}</div>
+          <div class="cart-sub">${item.qty} × ₹${item.unitPrice.toLocaleString('en-IN')}</div>
+        </div>
+        <div class="cart-price">₹${lineTotal.toLocaleString('en-IN')}</div>
+        <button class="cart-remove" onclick="removeFromCart(${i})">✕</button>
+      `;
+      listEl.appendChild(cartRow);
+
+      const summaryRow = document.createElement('div');
+      summaryRow.className = 'summary-row';
+      summaryRow.innerHTML = `<span class="dim">${typeLabel} · ${brandLabel} (${item.qty}×)</span><span>₹${lineTotal.toLocaleString('en-IN')}</span>`;
+      summaryEl.appendChild(summaryRow);
+    });
+
+    document.getElementById('sumTotal').textContent = '₹' + total.toLocaleString('en-IN');
+  }
+
+  // ---------- Profile: saved addresses (max 5) ----------
+  function goToProfile(){
+    renderSavedAddresses();
+    renderOrderHistory();
+    showScreen('screen-profile');
+  }
+
+  let newAddrMap, newAddrMarker, newAddrMapInitialized = false;
+  function goToAddAddress(){
+    if(savedAddresses.length >= 5){
+      alert('You can save up to 5 addresses. Remove one before adding another.');
+      return;
+    }
+    document.querySelectorAll('[data-group="new-label"]').forEach(c=>c.classList.remove('selected'));
+    document.querySelector('[data-group="new-label"][data-value="Home"]').classList.add('selected');
+    document.getElementById('newAddressText').value = '';
+    showScreen('screen-add-address');
+    if(!newAddrMapInitialized){ initAddAddressMap(); }
+    setTimeout(()=>{ if(newAddrMap) newAddrMap.invalidateSize(); }, 150);
+  }
+
+  function initAddAddressMap(){
+    const fallback = [12.9865, 77.5648];
+    newAddrMap = L.map('addAddressMap', { zoomControl:false, attributionControl:false }).setView(fallback, 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(newAddrMap);
+    const pinIcon = L.divIcon({ className:'', html:'<div style="font-size:30px; transform:translateY(-8px); filter: drop-shadow(0 3px 4px rgba(0,0,0,0.5));">📍</div>', iconSize:[30,30], iconAnchor:[15,30] });
+    newAddrMarker = L.marker(fallback, { icon: pinIcon, draggable:true }).addTo(newAddrMap);
+    newAddrMapInitialized = true;
+
+    if(navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(
+        pos=>{
+          const coords = [pos.coords.latitude, pos.coords.longitude];
+          newAddrMap.setView(coords, 16);
+          newAddrMarker.setLatLng(coords);
+        },
+        err=>{ /* keep fallback view if permission denied or unavailable */ }
+      );
+    }
+  }
+
+  document.querySelectorAll('[data-group="new-label"]').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      document.querySelectorAll('[data-group="new-label"]').forEach(c=>c.classList.remove('selected'));
+      chip.classList.add('selected');
+    });
+  });
+
+  function confirmAddAddress(){
+    const text = document.getElementById('newAddressText').value.trim();
+    if(!text){
+      alert('Please enter the full address.');
+      return;
+    }
+    const label = document.querySelector('[data-group="new-label"].selected')?.dataset.value || 'Home';
+    const pos = newAddrMarker.getLatLng();
+    savedAddresses.push({ label: label, text: text, lat: pos.lat, lng: pos.lng });
+    goToProfile();
+  }
+
+  function removeSavedAddress(index){
+    savedAddresses.splice(index, 1);
+    renderSavedAddresses();
+  }
+
+  function useSavedAddress(index){
+    const addr = savedAddresses[index];
+    document.getElementById('addressInput').value = addr.text;
+    showScreen('screen-booking');
+  }
+
+  function renderSavedAddresses(){
+    const listEl = document.getElementById('savedAddressList');
+    listEl.innerHTML = '';
+    savedAddresses.forEach((addr, i)=>{
+      const row = document.createElement('div');
+      row.className = 'addr-row';
+      row.innerHTML = `
+        <div class="addr-info" onclick="useSavedAddress(${i})">
+          <div class="addr-label">📍 ${addr.label}</div>
+          <div class="addr-text">${addr.text}</div>
+        </div>
+        <button class="addr-remove" onclick="removeSavedAddress(${i}); event.stopPropagation();">✕</button>
+      `;
+      listEl.appendChild(row);
+    });
+    document.getElementById('addAddressBtn').style.display = savedAddresses.length >= 5 ? 'none' : 'block';
+  }
+
+  // ---------- Profile: order history + reorder ----------
+  function recordOrderInHistory(){
+    if(cart.length === 0) return;
+    const total = cart.reduce((sum, item)=>sum + item.unitPrice*item.qty, 0);
+    orderHistory.unshift({
+      id: 'CYL-' + Math.floor(10000 + Math.random()*89999),
+      date: new Date().toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' }),
+      items: JSON.parse(JSON.stringify(cart)),
+      total: total
+    });
+  }
+
+  function reorder(index){
+    const order = orderHistory[index];
+    cart = JSON.parse(JSON.stringify(order.items));
+    renderCart();
+    showScreen('screen-booking');
+  }
+
+  function renderOrderHistory(){
+    const listEl = document.getElementById('orderHistoryList');
+    const emptyEl = document.getElementById('orderHistoryEmpty');
+    listEl.innerHTML = '';
+    emptyEl.style.display = orderHistory.length === 0 ? 'block' : 'none';
+
+    orderHistory.forEach((order, i)=>{
+      const itemsText = order.items.map(item => `${typeNames[item.type]} × ${item.qty} (${brandNames[item.brand]})`).join(', ');
+      const row = document.createElement('div');
+      row.className = 'order-row';
+      row.innerHTML = `
+        <div class="order-top">
+          <span>#${order.id}</span>
+          <span class="order-date">${order.date}</span>
+        </div>
+        <div class="order-items">${itemsText}</div>
+        <div class="order-total">₹${order.total.toLocaleString('en-IN')}</div>
+        <button class="reorder-btn" onclick="reorder(${i})">🔁 Reorder</button>
+      `;
+      listEl.appendChild(row);
+    });
+  }
+
+  // ---------- Star rating ----------
+  document.querySelectorAll('#rateRow .star').forEach(star=>{
+    star.addEventListener('click', ()=>{
+      const v = parseInt(star.dataset.v);
+      document.querySelectorAll('#rateRow .star').forEach(s=>{
+        s.classList.toggle('filled', parseInt(s.dataset.v) <= v);
+      });
+    });
+  });
+
+  // ---------- Language toggle (EN / HI) ----------
+  const translations = {
+    en: {
+      wa_greeting: "Hi! 👋 Welcome to GasDost. Tap below to book your LPG cylinder refill — it only takes a minute.",
+      wa_book_btn: "Book on GasDost",
+      wa_opens_browser: "Opens GasDost in your browser",
+      login_title: "Log in to continue",
+      mobile_label: "Mobile number",
+      otp_disclaimer: "We'll text a 4-digit code to verify it's you. Standard message rates may apply.",
+      send_otp_btn: "Send OTP",
+      otp_title: "Enter OTP",
+      otp_sent_to: "Code sent via SMS to",
+      otp_error: "Incorrect code. Try again.",
+      otp_no_code: "Didn't get it?",
+      resend_code: "Resend code",
+      verify_btn: "Verify & continue",
+      change_number_btn: "Change number",
+      booking_title: "Book your cylinder",
+      choose_distributor: "Which Company's Cylinder?",
+      private_cylinder: "Private",
+      private_sub: "Local supplier",
+      cylinder_type: "Cylinder type",
+      quantity: "Quantity",
+      add_to_cart_btn: "Add to Cart",
+      your_cart: "Your cart",
+      cart_empty: "No items added yet — pick a cylinder above and tap \"Add to Cart\".",
+      pay_on_delivery: "Cash or UPI on Delivery",
+      deliver_to: "Deliver to",
+      edit_link: "Edit ›",
+      payment: "Payment",
+      pay_cod: "Cash on delivery",
+      pay_card: "Card",
+      order_summary: "Order summary",
+      cylinder_label: "Cylinder",
+      delivery_fee: "Delivery fee",
+      total_label: "Total",
+      book_now_btn: "Book now",
+      address_title: "Delivery address",
+      pin_location: "Pin location",
+      add_address_title: "Add new address",
+      drag_pin_hint: "Drag the pin on the map to your exact location.",
+      use_current_location: "Use current location",
+      address_label: "Address label",
+      label_home: "Home",
+      label_work: "Work",
+      label_other: "Other",
+      full_address: "Full address",
+      save_address_btn: "Save address",
+      cancel_btn: "Cancel",
+      booking_confirmed: "Booking confirmed",
+      confirm_desc: "Your distributor has accepted the order. A delivery agent will be assigned shortly.",
+      sent_to_whatsapp: "Sent to your WhatsApp just now",
+      wa_confirm_msg: "Your GasDost order #CYL-48213 is confirmed 🎉 Arjun will deliver it soon. Tap below to watch it arrive live.",
+      track_order_btn: "Track Order",
+      cancel_order_btn: "Cancel Order",
+      back_home_btn: "Back to home",
+      order_label: "Order",
+      rider_name: "Arjun is delivering your cylinder",
+      status_enroute: "Picked up from distributor · heading your way",
+      min_away: "min away",
+      delivered_eyebrow: "GasDost · Delivered",
+      delivered_title: "Cylinder delivered",
+      paid_cash: "Paid (Cash)",
+      rate_delivery: "Rate your delivery",
+      book_another_btn: "Book another",
+      profile_title: "Your profile",
+      saved_addresses: "Saved addresses",
+      add_address_btn: "Add address",
+      order_history: "Order history",
+      no_orders_yet: "No past orders yet."
+    },
+    hi: {
+      wa_greeting: "नमस्ते! 👋 GasDost में आपका स्वागत है। अपना LPG सिलेंडर बुक करने के लिए नीचे टैप करें — बस एक मिनट लगेगा।",
+      wa_book_btn: "GasDost पर बुक करें",
+      wa_opens_browser: "GasDost आपके ब्राउज़र में खुलेगा",
+      login_title: "जारी रखने के लिए लॉग इन करें",
+      mobile_label: "मोबाइल नंबर",
+      otp_disclaimer: "आपकी पहचान की पुष्टि के लिए हम 4 अंकों का कोड भेजेंगे। मानक संदेश शुल्क लागू हो सकते हैं।",
+      send_otp_btn: "OTP भेजें",
+      otp_title: "OTP दर्ज करें",
+      otp_sent_to: "SMS द्वारा कोड भेजा गया",
+      otp_error: "गलत कोड। पुनः प्रयास करें।",
+      otp_no_code: "कोड नहीं मिला?",
+      resend_code: "कोड फिर से भेजें",
+      verify_btn: "सत्यापित करें और जारी रखें",
+      change_number_btn: "नंबर बदलें",
+      booking_title: "अपना सिलेंडर बुक करें",
+      choose_distributor: "किस कंपनी का सिलेंडर?",
+      private_cylinder: "प्राइवेट",
+      private_sub: "स्थानीय सप्लायर",
+      cylinder_type: "सिलेंडर का प्रकार",
+      quantity: "मात्रा",
+      add_to_cart_btn: "कार्ट में जोड़ें",
+      your_cart: "आपकी कार्ट",
+      cart_empty: "अभी तक कोई आइटम नहीं जोड़ा गया — ऊपर सिलेंडर चुनें और \"कार्ट में जोड़ें\" दबाएं।",
+      pay_on_delivery: "डिलीवरी पर नकद या UPI",
+      deliver_to: "डिलीवरी पता",
+      edit_link: "बदलें ›",
+      payment: "भुगतान",
+      pay_cod: "डिलीवरी पर नकद",
+      pay_card: "कार्ड",
+      order_summary: "ऑर्डर सारांश",
+      cylinder_label: "सिलेंडर",
+      delivery_fee: "डिलीवरी शुल्क",
+      total_label: "कुल",
+      book_now_btn: "अभी बुक करें",
+      address_title: "डिलीवरी पता",
+      pin_location: "स्थान पिन करें",
+      add_address_title: "नया पता जोड़ें",
+      drag_pin_hint: "अपने सटीक स्थान के लिए मानचित्र पर पिन खींचें।",
+      use_current_location: "वर्तमान स्थान का उपयोग करें",
+      address_label: "पते का लेबल",
+      label_home: "घर",
+      label_work: "कार्यालय",
+      label_other: "अन्य",
+      full_address: "पूरा पता",
+      save_address_btn: "पता सहेजें",
+      cancel_btn: "रद्द करें",
+      booking_confirmed: "बुकिंग की पुष्टि हुई",
+      confirm_desc: "आपके वितरक ने ऑर्डर स्वीकार कर लिया है। जल्द ही एक डिलीवरी एजेंट नियुक्त किया जाएगा।",
+      sent_to_whatsapp: "अभी आपके WhatsApp पर भेजा गया",
+      wa_confirm_msg: "आपका GasDost ऑर्डर #CYL-48213 कन्फर्म हो गया है 🎉 अर्जुन जल्द ही डिलीवर करेंगे। लाइव ट्रैक करने के लिए नीचे टैप करें।",
+      track_order_btn: "ऑर्डर ट्रैक करें",
+      cancel_order_btn: "ऑर्डर रद्द करें",
+      back_home_btn: "होम पर वापस जाएं",
+      order_label: "ऑर्डर",
+      rider_name: "अर्जुन आपका सिलेंडर डिलीवर कर रहे हैं",
+      status_enroute: "वितरक से उठाया गया · आपकी ओर आ रहे हैं",
+      min_away: "मिनट दूर",
+      delivered_eyebrow: "GasDost · डिलीवर हो गया",
+      delivered_title: "सिलेंडर डिलीवर हो गया",
+      paid_cash: "भुगतान (नकद)",
+      rate_delivery: "अपनी डिलीवरी को रेट करें",
+      book_another_btn: "एक और बुक करें",
+      profile_title: "आपकी प्रोफ़ाइल",
+      saved_addresses: "सहेजे गए पते",
+      add_address_btn: "पता जोड़ें",
+      order_history: "ऑर्डर इतिहास",
+      no_orders_yet: "अभी तक कोई पिछला ऑर्डर नहीं।"
+    }
+  };
+  let currentLang = 'en';
+  function setLanguage(lang){
+    currentLang = lang;
+    document.getElementById('btnLangEn').classList.toggle('active', lang === 'en');
+    document.getElementById('btnLangHi').classList.toggle('active', lang === 'hi');
+    document.querySelectorAll('[data-i18n]').forEach(el=>{
+      const key = el.dataset.i18n;
+      if(translations[lang][key]) el.textContent = translations[lang][key];
+    });
+  }
+
+  // ---------- Screen navigation ----------
+  function showScreen(id){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+  function launchFromWhatsApp(){
+    showScreen('screen-login');
+  }
+
+  // ---------- OTP login flow ----------
+  const DEMO_OTP = '1234';
+  let resendCountdown = null;
+
+  function sendOtp(){
+    const phone = document.getElementById('phoneInput').value.trim();
+    const display = phone.length === 10 ? phone.replace(/(\d{5})(\d{5})/, '$1 $2') : '98765 43210';
+    document.getElementById('otpPhoneDisplay').textContent = '+91 ' + display;
+    showScreen('screen-otp');
+    document.querySelectorAll('.otp-box').forEach(b=>b.value='');
+    document.getElementById('otpError').style.display = 'none';
+    setTimeout(()=>document.querySelector('.otp-box').focus(), 350);
+    startResendTimer();
+  }
+
+  document.querySelectorAll('.otp-box').forEach((box, i, all)=>{
+    box.addEventListener('input', ()=>{
+      box.value = box.value.replace(/[^0-9]/g,'');
+      if(box.value && i < all.length-1){ all[i+1].focus(); }
+    });
+    box.addEventListener('keydown', e=>{
+      if(e.key === 'Backspace' && !box.value && i > 0){ all[i-1].focus(); }
+    });
+  });
+
+  function verifyOtp(){
+    const entered = Array.from(document.querySelectorAll('.otp-box')).map(b=>b.value).join('');
+    if(entered === DEMO_OTP){
+      document.getElementById('otpError').style.display = 'none';
+      goToBooking();
+    } else {
+      document.getElementById('otpError').style.display = 'block';
+    }
+  }
+
+  function resendOtp(){
+    document.querySelectorAll('.otp-box').forEach(b=>b.value='');
+    document.getElementById('otpError').style.display = 'none';
+    startResendTimer();
+  }
+
+  function startResendTimer(){
+    let seconds = 30;
+    const link = document.getElementById('resendLink');
+    const timer = document.getElementById('resendTimer');
+    link.style.pointerEvents = 'none';
+    link.style.opacity = '0.4';
+    if(resendCountdown) clearInterval(resendCountdown);
+    resendCountdown = setInterval(()=>{
+      seconds--;
+      timer.textContent = seconds > 0 ? ` (${seconds}s)` : '';
+      if(seconds <= 0){
+        clearInterval(resendCountdown);
+        link.style.pointerEvents = 'auto';
+        link.style.opacity = '1';
+      }
+    }, 1000);
+  }
+  function cancelOrder(){
+    if(confirm('Are you sure you want to cancel this order?')){
+      goToBooking();
+    }
+  }
+  function renderSavedAddrChips(){
+    const chipEl = document.getElementById('savedAddrChips');
+    chipEl.innerHTML = '';
+    savedAddresses.forEach((addr, i)=>{
+      const chip = document.createElement('div');
+      chip.className = 'pay-chip';
+      chip.textContent = '📍 ' + addr.label;
+      chip.onclick = ()=>{ document.getElementById('addressInput').value = addr.text; };
+      chipEl.appendChild(chip);
+    });
+  }
+
+  function goToBooking(){
+    cart = [];
+    renderCart();
+    renderSavedAddrChips();
+    showScreen('screen-booking');
+    if(!bookingMapInitialized){ initBookingMap(); }
+    setTimeout(()=>{ if(bookingMap) bookingMap.invalidateSize(); }, 150);
+  }
+  function goToConfirm(){
+    if(cart.length === 0){
+      alert('Please add at least one cylinder to your cart before booking.');
+      return;
+    }
+    recordOrderInHistory();
+    showScreen('screen-confirm');
+  }
+  let mapInitialized = false;
+  function goToTrack(){
+    showScreen('screen-track');
+    if(!mapInitialized){ initMap(); mapInitialized = true; }
+  }
+
+  let bookingMapInitialized = false;
+  let bookingMap, bookingMarker;
+  function initBookingMap(){
+    const fallback = [12.9865, 77.5648]; // fallback if location permission denied/unavailable
+    bookingMap = L.map('bookingMap', { zoomControl:false, attributionControl:false }).setView(fallback, 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(bookingMap);
+    const pinIcon = L.divIcon({ className:'', html:'<div style="font-size:28px; transform:translateY(-8px); filter: drop-shadow(0 3px 4px rgba(0,0,0,0.5));">📍</div>', iconSize:[28,28], iconAnchor:[14,28] });
+    bookingMarker = L.marker(fallback, { icon: pinIcon, draggable:true }).addTo(bookingMap);
+    bookingMapInitialized = true;
+
+    // Automatically request current location on load, no button press needed
+    if(navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(
+        pos=>{
+          const coords = [pos.coords.latitude, pos.coords.longitude];
+          bookingMap.setView(coords, 16);
+          bookingMarker.setLatLng(coords);
+        },
+        err=>{ /* keep fallback view if permission denied or unavailable */ }
+      );
+    }
+  }
+
+  // ---------- Tracking map (same logic as standalone demo) ----------
+  const route = [
+    [12.9352, 77.6146],[12.9358, 77.6162],[12.9366, 77.6178],[12.9375, 77.6190],
+    [12.9385, 77.6200],[12.9398, 77.6206],[12.9410, 77.6215],[12.9420, 77.6228],
+    [12.9432, 77.6238],[12.9445, 77.6248]
+  ];
+
+  function initMap(){
+    const map = L.map('map', { zoomControl:false, attributionControl:false }).setView(route[0], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    const destIcon = L.divIcon({ className:'', html:'<div class="pulse-dot"></div>', iconSize:[16,16] });
+    L.marker(route[route.length-1], { icon: destIcon }).addTo(map);
+
+    const fullLine = L.polyline(route, { color:'#1d5c3d', weight:4, opacity:0.5 }).addTo(map);
+    const traveledLine = L.polyline([route[0]], { color:'#38e07b', weight:4 }).addTo(map);
+
+    const riderIcon = L.divIcon({ className:'', html:'<div class="rider-icon">🚚<span class="cyl-badge">🛢️</span></div>', iconSize:[24,24], iconAnchor:[12,12] });
+    const riderMarker = L.marker(route[0], { icon: riderIcon }).addTo(map);
+
+    map.fitBounds(fullLine.getBounds(), { padding:[50,50] });
+    setTimeout(()=>map.invalidateSize(), 100);
+
+    let step = 0;
+    const totalSteps = route.length - 1;
+    const startEta = 12;
+
+    function bearing(a, b){
+      const lat1=a[0]*Math.PI/180, lat2=b[0]*Math.PI/180, dLng=(b[1]-a[1])*Math.PI/180;
+      const y=Math.sin(dLng)*Math.cos(lat2);
+      const x=Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLng);
+      return Math.atan2(y,x)*180/Math.PI;
+    }
+
+    function tick(){
+      if(step >= totalSteps){
+        document.getElementById('statusText').textContent = 'Arrived — your cylinder is here!';
+        document.getElementById('etaNum').textContent = '0';
+        document.querySelector('.eta .label').textContent = 'arrived';
+        const itemCount = cart.reduce((sum, item)=>sum+item.qty, 0);
+        const cartTotal = cart.reduce((sum, item)=>sum + item.unitPrice*item.qty, 0);
+        const summaryText = cart.map(item => `${typeNames[item.type]} × ${item.qty} (${brandNames[item.brand]})`).join(', ');
+        document.getElementById('receiptSub').textContent = `Delivered today · ${summaryText}`;
+        document.getElementById('receiptCylPrice').textContent = '₹' + cartTotal.toLocaleString('en-IN');
+        document.getElementById('receiptTotal').textContent = '₹' + cartTotal.toLocaleString('en-IN');
+        setTimeout(()=>showScreen('screen-delivered'), 1600);
+        return;
+      }
+      step++;
+      const pos = route[step];
+      riderMarker.setLatLng(pos);
+      traveledLine.addLatLng(pos);
+      map.panTo(pos, { animate:true, duration:0.5 });
+
+      const angle = bearing(route[step-1], pos);
+      document.querySelector('.rider-icon').style.transform = `rotate(${angle}deg)`;
+
+      const pct = Math.round((step/totalSteps)*100);
+      document.getElementById('progressFill').style.width = pct + '%';
+
+      const remaining = Math.max(0, Math.round(startEta * (1 - step/totalSteps)));
+      document.getElementById('etaNum').textContent = remaining;
+
+      setTimeout(tick, step === totalSteps ? 900 : 1400);
+    }
+    setTimeout(tick, 1200);
+  }
+</script>
+</body>
+</html>
