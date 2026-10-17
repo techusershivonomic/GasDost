@@ -1,0 +1,38 @@
+{
+  "id": "./lm_delivery_app.html",
+  "name": "GasDost",
+  "short_name": "GasDost",
+  "description": "Delivery app for locating LPG bookings by customer mobile number and tracking live customer locations.",
+  "start_url": "./lm_delivery_app.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f4f6f9",
+  "theme_color": "#c62828",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

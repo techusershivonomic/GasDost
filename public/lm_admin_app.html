@@ -1,0 +1,3084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GasDost — Admin</title>
+<link rel="manifest" href="manifest-admin.json">
+<meta name="theme-color" content="#c62828">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/favicon-32.png">
+<script src="i18n.js"></script>
+<script src="install.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --blue:#0a6cff; --blue-dark:#0850c4; --brand:#c62828; --brand-dark:#9b1919; --green:#1caa5c; --amber:#e08a00;
+    --bg:#f4f6f9; --card:#ffffff; --text:#1c2530; --muted:#6b7684; --border:#e2e6ec;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  header{background:linear-gradient(135deg,var(--brand),var(--brand-dark));color:#fff;padding:20px 32px;display:flex;align-items:center;gap:12px;}
+  header h1{font-size:19px;margin:0;font-weight:700;}
+  header .badge{background:rgba(255,255,255,.18);padding:4px 12px;border-radius:20px;font-size:12px;font-weight:500;}
+  main{max-width:1100px;margin:0 auto;padding:22px 32px 60px;}
+  .tab-panel{display:none;grid-template-columns:1fr 1fr;gap:22px;align-items:start;}
+  .tab-panel.active{display:grid;}
+  @media (max-width:920px){ .tab-panel{grid-template-columns:1fr;} }
+  .tabbar{max-width:1100px;margin:0 auto;padding:0 32px;display:flex;gap:6px;}
+  .tabbar-wrap{background:var(--card);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;}
+  .tab-btn{background:transparent;border:none;border-bottom:3px solid transparent;padding:15px 18px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:8px;}
+  .tab-btn:hover{color:var(--text);}
+  .tab-btn.active{color:var(--blue);border-bottom-color:var(--blue);}
+  .tab-btn .count{background:#eef1f5;color:var(--muted);border-radius:20px;padding:1px 8px;font-size:11.5px;font-weight:700;}
+  .tab-btn.active .count{background:#e4efff;color:var(--blue);}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;}
+  .card h2{font-size:16px;margin:0 0 6px;}
+  .card p.small{font-size:13px;color:var(--muted);margin:0 0 16px;line-height:1.5;}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+  .form-row.full{grid-template-columns:1fr;}
+  label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:5px;font-weight:600;}
+  input[type=text]{width:100%;padding:10px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px;}
+  input[type=text]:focus{outline:2px solid var(--blue);border-color:var(--blue);}
+  .cc-row{display:flex;gap:8px;}
+  .cc{display:flex;align-items:center;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:#f6f8fb;font-weight:700;font-size:14px;}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 18px;border-radius:9px;border:none;font-size:14px;font-weight:600;cursor:pointer;}
+  .btn-primary{background:var(--blue);color:#fff;}
+  .btn-primary:hover{background:var(--blue-dark);}
+  .btn-ghost{background:#eef1f5;color:var(--text);}
+  .btn-ghost:hover{background:#e3e7ee;}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+  .error{color:#d33;font-size:13px;margin-top:6px;min-height:16px;}
+  .hint{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.5;}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--border);}
+  th{color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;font-weight:600;}
+  td.rm{text-align:right;}
+  .rm-btn{border:none;background:transparent;color:#d33;cursor:pointer;font-size:15px;padding:2px 6px;}
+  .empty-row{color:var(--muted);font-size:13px;padding:16px 0;text-align:center;}
+  .batch-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+  .batch-count{font-size:13px;color:var(--muted);font-weight:600;}
+  .warn-box{background:#fff3e0;border:1px solid #f3d9a6;color:#8a5a00;border-radius:9px;padding:10px 12px;font-size:12.5px;margin-top:10px;}
+  .ok-box{background:#e9f8ef;border:1px solid #b7e6ca;color:#0f7a41;border-radius:9px;padding:10px 12px;font-size:12.5px;margin-top:10px;}
+  .upload-note{display:flex;align-items:center;gap:8px;background:#f0f6ff;border:1px solid #cfe1ff;color:#0850c4;border-radius:9px;padding:9px 12px;font-size:12.5px;margin-bottom:14px;}
+  .qr-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:18px 0 4px;}
+  #qrcode{padding:14px;background:#fff;border:1px solid var(--border);border-radius:12px;}
+  .qr-actions{display:flex;gap:10px;}
+  .payload-preview{background:#f6f8fb;border:1px solid var(--border);border-radius:9px;padding:10px 12px;font-size:11.5px;color:var(--muted);font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all;max-height:160px;overflow:auto;margin-top:14px;}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1c2530;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:999;}
+  .toast.show{opacity:1;}
+  textarea{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:9px;font-size:13.5px;
+           font-family:inherit;line-height:1.6;resize:vertical;}
+  textarea:focus{outline:2px solid var(--blue);border-color:var(--blue);}
+  select{width:100%;padding:10px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:#fff;}
+  .sent-yes{color:var(--green);font-weight:700;}
+  .sent-no{color:var(--muted);}
+  .send-btn{border:none;border-radius:8px;padding:7px 13px;font-size:12.5px;font-weight:700;cursor:pointer;}
+  .send-btn.todo{background:#25D366;color:#fff;}
+  .send-btn.again{background:#eef1f5;color:var(--text);}
+  .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:14px 0 14px;}
+  @media (max-width:620px){ .kpi-grid{grid-template-columns:repeat(2,1fr);} }
+  .kpi{border:1px solid var(--border);border-radius:11px;padding:14px 16px;background:#fafbfd;}
+  .kpi-click{cursor:pointer;transition:border-color .15s,box-shadow .15s;}
+  .kpi-click:hover{border-color:var(--blue);box-shadow:0 0 0 3px #e4efff;}
+  .num-btn{border:none;background:transparent;font:inherit;font-weight:700;color:inherit;cursor:pointer;
+           text-decoration:underline;text-underline-offset:3px;padding:2px 6px;border-radius:6px;}
+  .num-btn:hover{background:#eef1f5;}
+  .kpi-num{font-size:26px;font-weight:700;line-height:1.1;}
+  .kpi-label{font-size:12px;color:var(--muted);margin-top:3px;font-weight:600;}
+  .kpi-total .kpi-num{color:var(--blue);}
+  .kpi-delivered .kpi-num{color:var(--green);}
+  .kpi-pending .kpi-num{color:var(--amber);}
+  .kpi-rate .kpi-num{color:var(--text);}
+  .bar-outer{height:9px;background:#eef1f5;border-radius:6px;overflow:hidden;}
+  .bar-inner{height:100%;background:var(--green);border-radius:6px;transition:width .3s;}
+  .bar-mini{height:6px;background:#eef1f5;border-radius:4px;overflow:hidden;min-width:70px;}
+  .bar-mini > div{height:100%;background:var(--green);border-radius:4px;}
+  .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:600;}
+  .pill-on{background:#e6f7ee;color:#0f7a41;}
+  .pill-off{background:#eef1f5;color:var(--muted);}
+  td.num{font-variant-numeric:tabular-nums;font-weight:600;}
+  select.need-pick{border:2px solid var(--red, #d22) !important;background:#fff2f2;}
+  .hist-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:8px;}
+  .hist-controls label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:4px;}
+  .hist-controls input,.hist-controls select{padding:8px 10px;border-radius:10px;border:1px solid #d6dbe3;font-size:14px;min-width:150px;}
+  .hist-cust label{display:flex;flex-direction:column;font-size:13px;font-weight:600;gap:6px;margin-top:8px;}
+  .hist-cust input{padding:10px 12px;border-radius:10px;border:1px solid #d6dbe3;font-size:15px;max-width:420px;}
+  .hc-card{border:1px solid #e3e7ee;border-radius:12px;padding:10px 14px;margin-top:8px;max-width:640px;}
+  .hc-card .hc-row{display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-top:1px dashed #e8ebf0;font-size:14px;}
+  .hc-card .hc-row:first-of-type{border-top:none;}
+  .hist-or{margin:16px 0 4px;color:var(--muted);font-size:12px;}
+  .hist-quick{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+  .hist-quick .btn{padding:6px 12px;font-size:13px;}
+  .kpi-waiting .kpi-num{color:#c2410c;}
+  .wait-num{color:#c2410c;}
+  tr.gone td{opacity:.75;}
+  #qrcode{background:#fff;padding:16px;border-radius:12px;}
+  .qr-nav{gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;}
+  .trk-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:14px 0 10px;}
+  @media (max-width:900px){ .trk-grid{grid-template-columns:repeat(3,1fr);} }
+  @media (max-width:560px){ .trk-grid{grid-template-columns:repeat(2,1fr);} }
+  .trk-tile{border:1px solid #e3e7ee;border-radius:12px;padding:10px 12px;cursor:pointer;background:#fff;text-align:left;}
+  .trk-tile:hover{border-color:var(--blue);}
+  .trk-tile .n{font-size:24px;font-weight:800;}
+  .trk-tile .l{font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .trk-tile .x{font-size:11.5px;color:var(--muted);}
+  .trk-ok .n{color:var(--green);} .trk-wait .n{color:#c2410c;} .trk-not .n{color:#b91c1c;}
+  .mm-input{width:150px;padding:6px 8px;border-radius:8px;border:1px solid #d6dbe3;font-size:14px;}
+  .mm-input.bad{border-color:#d33;background:#fff2f2;}
+  .mm-note{font-size:12px;color:#b45309;margin-top:4px;}
+  .bulk-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0;padding:10px 12px;background:#fff7e6;border:1px solid #f5d38a;border-radius:10px;}
+  .bulk-bar .move-sel{max-width:220px;}
+  .pair-box{text-align:center;}
+  .pair-code{font-size:40px;font-weight:900;letter-spacing:6px;color:var(--brand);margin:4px 0;font-variant-numeric:tabular-nums;}
+  body:not(.cust-edit) .edit-only{display:none !important;}
+  body.cust-edit #custEditBtn{background:#fff2f2;color:#d33;}
+  .pin-modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px;}
+  .pin-card{background:#fff;border-radius:14px;padding:18px;width:100%;max-width:400px;box-shadow:0 10px 30px rgba(0,0,0,.25);}
+  .pin-title{font-size:17px;font-weight:800;}
+  .pin-input{font-size:22px;letter-spacing:8px;text-align:center;}
+  .sub-h{font-size:15px;margin:0 0 6px;}
+  .move-sel{padding:5px 6px;border-radius:8px;border:1px solid var(--border, #d6dbe3);font-size:13px;max-width:170px;}
+  tr.unassigned td{color:var(--muted);font-style:italic;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⛽ GasDost — Admin</h1>
+  <span class="badge">Desktop console</span>
+  <span style="flex:1;"></span>
+  <span data-lang-slot></span>
+  <button id="installBtn" class="install-btn" onclick="installApp()" title="Install GasDost Admin on this computer">⬇ Install</button>
+  <button id="netBtn" class="badge" style="border:none;cursor:pointer;font-size:12.5px;" onclick="connectOnline()">⚪ Offline</button>
+</header>
+
+<div class="tabbar-wrap">
+  <nav class="tabbar">
+    <button class="tab-btn active" data-tab="status" onclick="switchTab('status')">
+      📊 Delivery status
+    </button>
+    <button class="tab-btn" data-tab="bookings" onclick="switchTab('bookings')">
+      📦 Bookings <span class="count" id="tabBatchCount">0</span>
+    </button>
+    <button class="tab-btn" data-tab="customers" onclick="switchTab('customers')">
+      👥 Customers <span class="count" id="tabCustCount">0</span>
+    </button>
+    <button class="tab-btn" data-tab="send" onclick="switchTab('send')">
+      📤 Send links <span class="count" id="tabSendCount">0</span>
+    </button>
+  </nav>
+</div>
+
+<main>
+
+<!-- ============ DELIVERY STATUS ============ -->
+<section class="tab-panel active" id="tab-status">
+  <div class="card" style="grid-column:1 / -1;" id="phoneSetupCard">
+    <div class="batch-header">
+      <h2 style="margin:0;">📱 Connect a delivery man's phone</h2>
+      <button class="btn btn-ghost" onclick="showPhoneSetup()">Show setup QR code</button>
+    </div>
+    <p class="small" style="margin:6px 0 0;">Do this once per phone. In the GasDost app on his phone (best after installing it on the home screen), he taps <b>📷 Scan office QR</b> and points it at this code — or types the <b>6-digit code</b>. From then on, his bookings and customer locations come to his phone by themselves.</p>
+    <div class="qr-wrap" id="phoneQrWrap" style="display:none;">
+      <div id="phoneQr"></div>
+      <div class="pair-box">
+        <div class="small" style="margin:0;">Or type this code in the app:</div>
+        <div class="pair-code" id="pairCode">— — —</div>
+        <div class="small" id="pairLeft" style="margin:0;"></div>
+        <button class="btn btn-ghost" style="padding:6px 12px;font-size:13px;" onclick="newPairCode()">🔄 New code</button>
+      </div>
+      <div class="warn-box" style="max-width:420px;">Show this only to your own delivery men. Anyone who scans it can see customer locations. Close it when you are done.</div>
+      <button class="btn btn-ghost" onclick="document.getElementById('phoneQrWrap').style.display='none';document.getElementById('phoneQr').innerHTML='';">Close</button>
+    </div>
+  </div>
+  <div class="card" style="grid-column:1 / -1;">
+    <div class="batch-header">
+      <h2 style="margin:0;">Delivery status</h2>
+      <span class="batch-count" id="team_active_summary">0 of 0 delivery men active</span>
+    </div>
+    <p class="small">Overall progress across all bookings, then broken down by delivery man.</p>
+
+    <div class="upload-note" id="lastUploadNote" style="display:none;"></div>
+
+    <div class="kpi-grid">
+      <div class="kpi kpi-total kpi-click" onclick="showBookingsBehind('all','')" title="See these bookings">
+        <div class="kpi-num" id="kpi_total">0</div>
+        <div class="kpi-label">Total bookings</div>
+      </div>
+      <div class="kpi kpi-delivered kpi-click" onclick="showBookingsBehind('delivered','')" title="See these bookings">
+        <div class="kpi-num" id="kpi_delivered">0</div>
+        <div class="kpi-label">Delivered</div>
+      </div>
+      <div class="kpi kpi-pending kpi-click" onclick="showBookingsBehind('pending','')" title="See these bookings">
+        <div class="kpi-num" id="kpi_pending">0</div>
+        <div class="kpi-label">Pending</div>
+      </div>
+      <div class="kpi kpi-waiting kpi-click" onclick="showBookingsBehind('waiting','')" title="Customers who have not sent their location yet">
+        <div class="kpi-num" id="kpi_waiting">0</div>
+        <div class="kpi-label">📍 Waiting for location</div>
+      </div>
+      <div class="kpi kpi-rate">
+        <div class="kpi-num" id="kpi_rate">0%</div>
+        <div class="kpi-label">Completed</div>
+      </div>
+    </div>
+
+    <div class="bar-outer" title="Share of all bookings delivered">
+      <div class="bar-inner" id="kpi_bar" style="width:0%;"></div>
+    </div>
+
+    <div id="dealerWrap" style="display:none;margin-top:18px;">
+      <h3 class="sub-h">🏪 By dealership</h3>
+      <table>
+        <thead><tr><th>Dealership</th><th class="num">Delivered</th><th class="num">Pending</th><th class="num">📍 Waiting for location</th><th class="num">Total</th><th>Progress</th></tr></thead>
+        <tbody id="dealerBody"></tbody>
+      </table>
+    </div>
+
+    <h3 class="sub-h" id="menHeading" style="display:none;margin-top:22px;">🚚 By delivery man</h3>
+    <div style="margin-top:18px;">
+      <label for="teamSearch">Find a delivery man</label>
+      <input type="text" id="teamSearch" placeholder="Type a name or mobile number" oninput="renderTeam()" autocomplete="off">
+      <div class="hint" id="teamSearchCount"></div>
+    </div>
+    <table id="statusTable" style="margin-top:10px;">
+      <thead>
+        <tr>
+          <th>Delivery man</th><th>Status</th><th>Delivered</th><th>Pending</th><th>Assigned</th><th>Progress</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="statusBody"></tbody>
+    </table>
+    <div class="card" id="behindCard" style="display:none;margin-top:16px;border-color:var(--blue);">
+      <div class="batch-header">
+        <h2 style="margin:0;" id="behindTitle"></h2>
+        <button class="btn btn-ghost" style="padding:6px 12px;font-size:13px;" onclick="document.getElementById('behindCard').style.display='none'">Close</button>
+      </div>
+      <div class="hint" id="behindCount"></div>
+      <div class="bulk-bar" id="bulkBar" style="display:none;">
+        <b id="bulkCount"></b>
+        <select id="bulkMove" class="move-sel" onchange="bulkMove(this)"></select>
+        <button class="send-btn again" onclick="bulkCancel()">✖ Cancel selected</button>
+        <button class="send-btn again" onclick="selectAllBehind(false)">Clear selection</button>
+      </div>
+      <table style="margin-top:6px;">
+        <thead><tr><th style="width:28px;"><input type="checkbox" id="bkSelAll" title="Select all" onchange="selectAllBehind(this.checked)"></th><th>Customer</th><th>Mobile</th><th>Address</th><th>Dealership</th><th>Status</th><th>Delivery man</th><th>Change</th></tr></thead>
+        <tbody id="behindBody"></tbody>
+      </table>
+    </div>
+    <div class="hint">"Active" means the delivery man's phone checked in during the last 15 minutes. Phones connected with the setup QR code appear here by themselves once he logs in. Pending counts every open booking; delivered counts today's deliveries — from every phone.</div>
+  </div>
+  <div class="card" style="grid-column:1 / -1;" id="trackerCard">
+    <div class="batch-header">
+      <h2 style="margin:0;">📍 Location tracker</h2>
+      <span class="batch-count" id="trkSaved"></span>
+    </div>
+    <p class="small">Follows each booking's location link: sent → opened by the customer → location pinned. A booking is <b>✅ complete</b> only once its location is pinned. Tap any number to see those customers.</p>
+    <div class="hist-controls">
+      <label>Bookings<select id="trkPeriod" onchange="loadTracker()">
+        <option value="current">Current bookings</option>
+        <option value="today">Booked today</option>
+        <option value="7">Booked in the last 7 days</option>
+        <option value="month">Booked this month</option>
+        <option value="customers">All saved customers</option>
+      </select></label>
+      <label>Dealership<select id="trkDealer" onchange="renderTracker()"><option value="">All dealerships</option></select></label>
+    </div>
+    <div class="trk-grid" id="trkTiles"></div>
+    <div id="trkCompleteBar" class="bar-outer" title="Bookings with a pinned location"><div class="bar-inner" id="trkBar" style="width:0%;"></div></div>
+    <div id="trkDealerWrap" style="margin-top:14px;overflow-x:auto;">
+      <h3 class="sub-h">🏪 By dealership</h3>
+      <table>
+        <thead><tr><th>Dealership</th><th class="num" id="trkUnitHead">Bookings</th><th class="num">📤 Sent</th><th class="num">👀 Opened</th><th class="num">✅ Pinned via link</th><th class="num">📍 Pinned other ways</th><th class="num">⏳ Sent, not pinned</th><th class="num">✉️ Not sent</th><th>Complete</th><th class="num">🏠 Doorsteps saved</th></tr></thead>
+        <tbody id="trkBody"></tbody>
+      </table>
+    </div>
+    <div id="trkListWrap" style="display:none;margin-top:16px;border-top:1px solid #e3e7ee;padding-top:12px;">
+      <div class="batch-header">
+        <h3 class="sub-h" id="trkListTitle" style="margin:0;"></h3>
+        <div>
+          <button class="btn btn-ghost" style="padding:6px 12px;font-size:13px;" onclick="downloadTrackerList()">⬇ Download Excel</button>
+          <button class="btn btn-ghost" style="padding:6px 12px;font-size:13px;" onclick="document.getElementById('trkListWrap').style.display='none'">Close</button>
+        </div>
+      </div>
+      <div class="hint" id="trkListCount"></div>
+      <div style="max-height:520px;overflow:auto;">
+        <table>
+          <thead><tr><th>Customer</th><th>Mobile</th><th>Dealership</th><th>Link sent</th><th>Opened</th><th>Location</th><th>Delivery man</th><th></th></tr></thead>
+          <tbody id="trkListBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="grid-column:1 / -1;" id="historyCard">
+    <div class="batch-header">
+      <h2 style="margin:0;">📅 Delivered history</h2>
+      <span class="batch-count" id="histCount"></span>
+    </div>
+    <p class="small">Every delivery is kept here, even after it leaves the delivery man's phone at midnight. Pick the dates and a delivery man, then see the list or download it as Excel.</p>
+    <div class="hist-cust">
+      <label>🔎 Find one customer's last 2 deliveries
+        <input type="text" id="histCust" placeholder="Mobile number or customer name" autocomplete="off" oninput="histCustSearch()">
+      </label>
+      <div id="histCustOut"></div>
+    </div>
+    <div class="hist-or">— or a report for dates —</div>
+    <div class="hist-controls">
+      <label>From<input type="date" id="histFrom"></label>
+      <label>To<input type="date" id="histTo"></label>
+      <label>Delivery man<select id="histWho"><option value="">Everyone</option></select></label>
+      <label>Dealership<select id="histDealer" onfocus="loadDealers()"><option value="">All dealerships</option></select></label>
+      <button class="btn btn-primary" onclick="showHistory()">🔍 Show</button>
+      <button class="btn btn-ghost" onclick="downloadHistory()">⬇ Download Excel</button>
+    </div>
+    <div class="hist-quick">
+      <button class="btn btn-ghost" onclick="histQuick(0)">Today</button>
+      <button class="btn btn-ghost" onclick="histQuick(1)">Yesterday</button>
+      <button class="btn btn-ghost" onclick="histQuick(7)">Last 7 days</button>
+      <button class="btn btn-ghost" onclick="histQuick('month')">This month</button>
+      <button class="btn btn-ghost" onclick="histQuick('lastmonth')">Last month</button>
+    </div>
+    <div id="histSummary" class="hint"></div>
+    <div id="histTableWrap" style="display:none;max-height:520px;overflow:auto;">
+      <table style="margin-top:6px;">
+        <thead><tr><th>#</th><th>Customer</th><th>Mobile</th><th>Address</th><th>Dealership</th><th>Delivered at</th><th>Delivered by</th></tr></thead>
+        <tbody id="histBody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ BOOKINGS ============ -->
+<section class="tab-panel" id="tab-bookings">
+  <div class="card" style="grid-column:1 / -1;">
+    <h2>Add bookings from an Excel file</h2>
+    <p class="small">Download the template, fill in one row per customer — just mobile number and name — then upload it here to add them all at once.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+      <button class="btn btn-ghost" onclick="downloadTemplate()">⬇ Download Excel template</button>
+      <label class="btn btn-primary" style="cursor:pointer;margin:0;">
+        ⬆ Upload filled template
+        <input type="file" id="xlsxFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleTemplateUpload(event)">
+      </label>
+    </div>
+    <div class="error" id="xlsxError"></div>
+    <div class="warn-box" id="xlsxSummary" style="display:none;"></div>
+  </div>
+
+  <div class="card">
+    <h2>Add booking to batch</h2>
+    <p class="small">Search your saved customers and tap <b>Add</b>, or type a mobile number below — if the customer is saved, their name, address and dealer fill in by themselves.</p>
+
+    <label for="bkSearch">Search saved customers</label>
+    <input type="text" id="bkSearch" placeholder="Name, mobile, address, dealer or unique code" oninput="renderBookingSearch()" autocomplete="off">
+    <div id="bkResults" style="margin:6px 0 16px;"></div>
+
+    <div class="form-row">
+      <div>
+        <label for="a_no">Mobile number</label>
+        <div class="cc-row">
+          <span class="cc">+91</span>
+          <input type="text" id="a_no" maxlength="10" placeholder="10-digit mobile number" inputmode="numeric" oninput="fillFromCustomer()">
+        </div>
+      </div>
+      <div>
+        <label for="a_booking">Booking ID</label>
+        <input type="text" id="a_booking" placeholder="auto-generated if left blank">
+      </div>
+    </div>
+    <div class="form-row full">
+      <div>
+        <label for="a_name">Consumer name</label>
+        <input type="text" id="a_name" placeholder="e.g. Ramesh Patil">
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label for="a_addr">Address</label>
+        <input type="text" id="a_addr" placeholder="optional">
+      </div>
+      <div>
+        <label for="a_dealer">Dealer name</label>
+        <input type="text" id="a_dealer" placeholder="optional">
+      </div>
+    </div>
+    <div class="ok-box" id="a_found" style="display:none;margin:0 0 12px;"></div>
+    <button class="btn btn-primary" onclick="addToBatch()">➕ Add to batch</button>
+    <div class="error" id="addError"></div>
+  </div>
+
+  <div class="card">
+    <div class="batch-header">
+      <h2 style="margin:0;">Batch</h2>
+      <span class="batch-count" id="batchCount">0 bookings</span>
+    </div>
+    <p class="small">Review the batch, then generate the QR code. Large batches may be less reliable to scan — keep to about 15 or fewer per code.</p>
+
+    <div id="batchTableWrap">
+      <div class="empty-row" id="batchEmpty">No bookings added yet.</div>
+      <table id="batchTable" style="display:none;">
+        <thead>
+          <tr><th>Mobile</th><th>Name</th><th>Address</th><th>Dealer</th><th>Booking</th><th></th></tr>
+        </thead>
+        <tbody id="batchBody"></tbody>
+      </table>
+    </div>
+    <div class="warn-box" id="batchWarn" style="display:none;"></div>
+
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
+      <select id="assignTo" style="width:auto;min-width:200px;" title="Which delivery man gets these bookings"><option value="__">👉 Choose delivery man</option></select>
+      <button class="btn btn-primary" id="uploadBtn" onclick="uploadBatch()" disabled>⬆ Upload batch</button>
+      <button class="btn btn-ghost" id="genBtn" onclick="generateQr()" disabled>📱 Generate QR code</button>
+      <button class="btn btn-ghost" onclick="clearBatch()">Clear batch</button>
+    </div>
+    <div class="hint">Upload sends the batch straight to the delivery app — it shows up on the delivery man's dashboard right away, no scanning needed. Use the QR code instead when his phone can't reach the same system.</div>
+    <div class="ok-box" id="uploadSummary" style="display:none;"></div>
+
+    <div class="qr-wrap" id="qrWrap" style="display:none;">
+      <div id="qrcode"></div>
+      <div id="qrNav" class="qr-nav" style="display:none;">
+        <button class="btn btn-ghost" id="qrPrev" onclick="qrStep(-1)">◀ Previous code</button>
+        <b id="qrPartLabel"></b>
+        <button class="btn btn-primary" id="qrNext" onclick="qrStep(1)">Next code ▶</button>
+      </div>
+      <div class="hint" style="max-width:420px;text-align:center;">Tip: turn the screen brightness up, and hold the phone 20–30 cm away so the whole code fits in the box.</div>
+      <div class="qr-actions">
+        <button class="btn btn-ghost" onclick="downloadQr()">⬇ Download QR as PNG</button>
+      </div>
+      <div class="payload-preview" id="payloadPreview" data-noi18n style="display:none;"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CUSTOMERS ============ -->
+<section class="tab-panel" id="tab-customers">
+  <div class="card" style="grid-column:1 / -1;">
+    <h2>Upload customer list</h2>
+    <p class="small">Download the template, fill in one row per customer, upload it, then press <b>Save customers</b>. When the console shows <b>🟢 Online</b> (top right), customers are saved in the online database — safe even if this browser is cleared, and the same on every office computer. They can be searched in <b>Bookings</b> and <b>Send links</b>. Uploading again updates customers already saved (matched by mobile number) and adds the new ones.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+      <button class="btn btn-ghost" onclick="downloadCustomerTemplate()">⬇ Download customer template</button>
+      <label class="btn btn-primary" style="cursor:pointer;margin:0;">
+        ⬆ Upload filled template
+        <input type="file" id="custFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleCustomerUpload(event)">
+      </label>
+    </div>
+    <div class="hint">Columns: <b>Name</b>, <b>Mobile Number</b>, <b>First Address</b>, <b>Dealer Name</b>. Name and Mobile Number are required, the rest can be left blank. The <b>Unique code</b> is given automatically when you save — C0001, C0002 and so on — and a customer keeps the same code for good.</div>
+    <div class="error" id="custError"></div>
+    <div class="warn-box" id="custPending" style="display:none;">
+      <div id="custPendingText"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+        <button class="btn btn-primary" onclick="savePendingCustomers()">💾 Save customers</button>
+        <button class="btn btn-ghost" onclick="cancelPendingCustomers()">Cancel</button>
+      </div>
+    </div>
+    <div class="ok-box" id="custSummary" style="display:none;"></div>
+  </div>
+
+  <div class="card" style="grid-column:1 / -1;display:none;" id="missingCard">
+    <div class="batch-header">
+      <h2 style="margin:0;">📵 Missing mobile number</h2>
+      <span class="batch-count" id="missingCount"></span>
+    </div>
+    <p class="small">These customers were in your Excel with a name but no mobile number. Type the number and press <b>💾 Save</b> — they move to Saved customers straight away. Or press <b>⬇ Download missing list</b>, fill the Mobile Number column in Excel, and upload it again above.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;">
+      <div style="flex:1;min-width:240px;">
+        <label for="missingSearch">Find</label>
+        <input type="text" id="missingSearch" placeholder="Name, address or dealer" oninput="missingOffset=0;loadMissing()" autocomplete="off">
+      </div>
+      <div style="min-width:220px;">
+        <label for="missingDealer">Dealership</label>
+        <select id="missingDealer" onchange="missingOffset=0;loadMissing()"><option value="__all">All dealerships</option></select>
+      </div>
+      <button class="btn btn-ghost" onclick="downloadMissing()">⬇ Download missing list</button>
+      <button class="btn btn-ghost" style="color:#d33;" onclick="clearMissingList()">🗑 Clear list</button>
+    </div>
+    <div class="hint" id="missingShowing"></div>
+    <table style="margin-top:6px;">
+      <thead><tr><th>Name</th><th>First address</th><th>Dealer name</th><th>Mobile number</th><th></th></tr></thead>
+      <tbody id="missingBody"></tbody>
+    </table>
+    <details id="filledBox" style="margin-top:12px;display:none;" ontoggle="if(this.open)loadFilled()">
+      <summary style="cursor:pointer;font-weight:600;">📋 Numbers filled — who filled them</summary>
+      <table style="margin-top:6px;">
+        <thead><tr><th>When</th><th>Customer</th><th>Mobile number</th><th>Dealer name</th><th>Filled by</th></tr></thead>
+        <tbody id="filledBody"></tbody>
+      </table>
+    </details>
+  </div>
+
+  <div class="card" style="grid-column:1 / -1;">
+    <div class="batch-header">
+      <h2 style="margin:0;">Saved customers</h2>
+      <span class="batch-count" id="custCount">0 customers</span>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;">
+      <div style="flex:1;min-width:240px;">
+        <label for="custSearch">Find a customer</label>
+        <input type="text" id="custSearch" placeholder="Name, mobile, address, dealer or unique code" oninput="custOffset=0;renderCustomers()" autocomplete="off">
+      </div>
+      <button class="btn btn-ghost" onclick="exportCustomers()">⬇ Export to Excel</button>
+      <button class="btn btn-ghost" id="custEditBtn" onclick="toggleCustEdit()">✏️ Edit</button>
+      <button class="btn btn-ghost edit-only" onclick="clearCustomers()" style="color:#d33;">Delete all</button>
+    </div>
+    <div class="warn-box edit-only" style="margin-top:8px;">✏️ Edit is on — the ✕ buttons delete customers. Deleting needs the Delete PIN, and deleted customers wait in the Recycle bin for 30 days.</div>
+    <div class="hint" id="custShowing"></div>
+    <table style="margin-top:6px;">
+      <thead><tr><th>Name</th><th>Mobile</th><th>First address</th><th>Dealer name</th><th>Unique code</th><th>Location</th><th></th></tr></thead>
+      <tbody id="custBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card" style="grid-column:1 / -1;" id="binCard">
+    <div class="batch-header">
+      <h2 style="margin:0;">🗑 Recycle bin</h2>
+      <span class="batch-count" id="binCount"></span>
+    </div>
+    <p class="small">Deleted customers stay here for 30 days with their code, link and location. Press <b>♻️ Restore</b> to bring them back. After 30 days they are removed for good.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:6px;">
+      <div style="flex:1;min-width:220px;">
+        <label for="binSearch">Find</label>
+        <input type="text" id="binSearch" placeholder="Name, mobile, dealer or code" oninput="binOffset=0;loadBin()" autocomplete="off">
+      </div>
+      <button class="btn btn-ghost" onclick="restoreAll()">♻️ Restore all</button>
+      <button class="btn btn-ghost" onclick="toggleDeleteLog()">📜 Delete history</button>
+      <button class="btn btn-ghost" onclick="changeDeletePin()">🔑 Change Delete PIN</button>
+    </div>
+    <div class="hint" id="binShowing"></div>
+    <table style="margin-top:6px;">
+      <thead><tr><th>Name</th><th>Mobile</th><th>Dealer name</th><th>Code</th><th>Deleted</th><th></th></tr></thead>
+      <tbody id="binBody"></tbody>
+    </table>
+    <div id="delLogWrap" style="display:none;margin-top:14px;">
+      <h3 class="sub-h">📜 Delete history (last 50)</h3>
+      <table><thead><tr><th>When</th><th>What</th><th class="num">How many</th><th>Computer</th><th>Detail</th></tr></thead><tbody id="delLogBody"></tbody></table>
+    </div>
+  </div>
+</section>
+
+<!-- Delete PIN box -->
+<div id="pinModal" class="pin-modal" style="display:none;">
+  <div class="pin-card">
+    <div class="pin-title" id="pinTitle"></div>
+    <div class="small" id="pinText" style="margin:6px 0 10px;"></div>
+    <div id="pinWordWrap" style="display:none;">
+      <label for="pinWord">Type <b>DELETE</b> to confirm</label>
+      <input type="text" id="pinWord" autocomplete="off" style="text-transform:uppercase;">
+    </div>
+    <label for="pinInput">Delete PIN</label>
+    <input type="password" id="pinInput" inputmode="numeric" maxlength="8" autocomplete="off" class="pin-input">
+    <div class="error" id="pinErr"></div>
+    <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closePin(null)">Cancel</button>
+      <button class="btn btn-primary" id="pinOk" style="background:#d33;" onclick="submitPin()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SEND LINKS ============ -->
+<section class="tab-panel" id="tab-send">
+
+  <div class="card" style="grid-column:1 / -1;">
+    <h2>Send location links to customers</h2>
+    <p class="small">Builds a personalised link for each customer and walks you through sending them on WhatsApp, one tap each. Every link is unique to that customer — it opens a page asking only for their location.</p>
+
+    <div class="form-row">
+      <div>
+        <label for="sendSource">Who to send to</label>
+        <select id="sendSource" onchange="loadRecipients()">
+          <option value="pending">Bookings waiting for a location</option>
+          <option value="all">All bookings in the delivery app</option>
+          <option value="batch">Whatever is in the current batch</option>
+          <option value="customers">All saved customers</option>
+        </select>
+      </div>
+      <div>
+        <label for="replyTo">Replies go to (delivery partner's number)</label>
+        <div class="cc-row">
+          <span class="cc">+91</span>
+          <input type="text" id="replyTo" maxlength="10" placeholder="10-digit mobile" inputmode="numeric" oninput="saveReplyTo()">
+        </div>
+      </div>
+    </div>
+    <div class="hint">When a customer shares their location it comes back to this number on WhatsApp, so put the delivery man who is doing that round.</div>
+  </div>
+
+  <div class="card" style="grid-column:1 / -1;">
+    <div class="batch-header">
+      <h2 style="margin:0;">Message template</h2>
+      <span class="batch-count">Use {name} {mobile} {address} {dealer} {booking} {link}</span>
+    </div>
+    <p class="small">Edit the wording however you like. The tags in braces are swapped for each customer's own details.</p>
+    <textarea id="msgTemplate" rows="7" oninput="saveTemplate(); renderSendList();"></textarea>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+      <button class="btn btn-ghost" onclick="resetTemplate()">Reset to default wording</button>
+    </div>
+    <div class="hint" style="margin-top:12px;"><b>Preview for the first customer:</b></div>
+    <div class="payload-preview" id="msgPreview" style="white-space:pre-wrap;" data-noi18n></div>
+  </div>
+
+  <div class="card" style="grid-column:1 / -1;">
+    <div class="batch-header">
+      <h2 style="margin:0;">Send queue</h2>
+      <span class="batch-count" id="sendProgress">0 of 0 sent</span>
+    </div>
+    <div class="bar-outer" style="margin-bottom:14px;"><div class="bar-inner" id="sendBar" style="width:0%;"></div></div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-primary" id="sendNextBtn" onclick="sendNext()">📲 Send next unsent</button>
+      <button class="btn btn-ghost" onclick="copyAllLinks()">📋 Copy all links</button>
+      <button class="btn btn-ghost" onclick="exportLinks()">⬇ Export to Excel</button>
+      <button class="btn btn-ghost" onclick="resetSent()">Clear sent marks</button>
+    </div>
+
+    <div class="warn-box" style="margin-top:12px;">Each send opens WhatsApp with the message ready — <b>you still press send yourself</b>. There is no way around that from a web page; see the note at the bottom for the paid route that removes it.</div>
+
+    <div style="margin-top:16px;">
+      <label for="sendSearch">Find a customer</label>
+      <input type="text" id="sendSearch" placeholder="Type a name or mobile number" oninput="sendSearchInput()" autocomplete="off">
+      <div class="hint" id="searchCount"></div>
+    </div>
+
+    <div class="ok-box" id="adhocBox" style="display:none;">
+      <b id="adhocNo"></b> is not in this list.
+      <div id="adhocSaved" style="margin-top:4px;font-weight:700;color:#137a3f;"></div>
+      <div class="form-row" style="margin:10px 0 0;">
+        <div><input type="text" id="adhocName" placeholder="Customer name (optional)"></div>
+        <div><button class="btn btn-send" style="width:100%;margin:0;" onclick="sendAdhoc()">📲 Send a link anyway</button></div>
+      </div>
+      <div class="hint" style="margin-top:8px;">Useful when someone rings up asking where their cylinder is — send them the link without adding a booking first.</div>
+    </div>
+
+    <table style="margin-top:14px;">
+      <thead><tr><th>Customer</th><th>Mobile</th><th>Address</th><th>Dealer</th><th>Status</th><th style="text-align:right;">Action</th></tr></thead>
+      <tbody id="sendBody"></tbody>
+    </table>
+
+    <div class="card" id="otherWays" style="display:none;margin-top:16px;border-color:var(--blue);">
+      <div class="batch-header">
+        <h2 style="margin:0;">Other ways to reach <span id="owName"></span></h2>
+        <button class="btn btn-ghost" style="padding:6px 12px;font-size:13px;" onclick="hideOtherWays()">Close</button>
+      </div>
+      <p class="small">If WhatsApp did not work — no WhatsApp on that number, or the message would not go.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;">
+        <button class="btn btn-ghost" onclick="owCopyMessage()">📋 Copy whole message</button>
+        <button class="btn btn-ghost" onclick="owCopyLink()">🔗 Copy just the link</button>
+        <button class="btn btn-ghost" onclick="owSms()">💬 Send as SMS</button>
+        <button class="btn btn-ghost" onclick="owEmail()">✉️ Send by email</button>
+        <button class="btn btn-ghost" onclick="owQr()">🔳 Show QR code</button>
+      </div>
+      <div id="owQrWrap" class="qr-wrap" style="display:none;">
+        <div id="owQrBox"></div>
+        <div class="hint" style="text-align:center;max-width:340px;">Let the customer scan this off your screen, or print it on the delivery slip. Opens the same location page.</div>
+      </div>
+      <div class="hint" id="owNote" style="margin-top:12px;"></div>
+    </div>
+  </div>
+
+  <div class="card" style="grid-column:1 / -1;">
+    <h2>Want it fully automatic?</h2>
+    <p class="small" style="margin-bottom:10px;">The one-tap queue above costs nothing and works today. Proper hands-off broadcasting needs the official WhatsApp Business API, which is a real step up:</p>
+    <ul style="margin:0 0 10px;padding-left:20px;font-size:13.5px;line-height:1.7;color:var(--muted);">
+      <li>A Meta Business account with your business verified, and a phone number given over to the API — that number can no longer use the normal WhatsApp app</li>
+      <li>Message wording submitted to Meta for approval before you may send it, usually a day or two</li>
+      <li>A small server to hold the API key — it cannot live in this page, because anyone could read it and send messages as you</li>
+      <li>A per-message fee. Indian providers such as AiSensy, Interakt, Gupshup or Wati wrap all of the above in a simpler dashboard for a monthly fee</li>
+      <li>Bulk <b>SMS</b> is a similar story in India — a gateway like MSG91 or Fast2SMS, plus DLT registration with TRAI for your sender ID and every message template, and a few paise per message. The per-customer SMS button above needs none of that, because your own phone sends it</li>
+    </ul>
+    <p class="small" style="margin:0;">Worth it once you are sending hundreds a day. Below that, the queue above is usually the better trade. The <b>Export to Excel</b> button gives you exactly the columns those providers ask for, so nothing is wasted if you move later.</p>
+  </div>
+
+</section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let batch = [];
+const ADMIN_KEY_STORE = 'lmbg_admin_key_v1'; // office password for the online database
+let tokenMap = {};       // mobile → secret link code
+let locMap = {};         // mobile → newest location the customer sent
+let onlineState = 'off'; // off | on | bad
+let custCache = new Map(); // mobile → customer details fetched from the database
+let custTotalAll = 0;      // how many customers the database holds
+let custOffset = 0;        // paging in the Customers tab
+let serverStatus = null;   // delivery status counted by the database
+const CUST_KEY = 'lmbg_customers_v1'; // saved customer list (Customers tab)
+let lastQrDataUrl = null;
+const QR_PER_CODE = 10;          // bookings per batch QR code
+let qrParts = [], qrPartIdx = 0;
+
+/* ---------------- tabs ---------------- */
+function switchTab(tab){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  if(tab==='status') renderTeam(); // pull the newest figures whenever this tab is opened
+  if(tab==='send') loadRecipients();
+  if(tab==='customers'){ renderCustomers(); loadMissing(); loadBin(); }
+  if(tab==='bookings'){ renderBookingSearch(); fillAssignList(); }
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+function isValidMobileNo(v){ return /^[6-9]\d{9}$/.test(v); } // Indian mobiles start 6-9
+// Customer keys: the mobile, or mobile-2, mobile-3 … when one mobile is a
+// customer of several dealerships. The phone number is always the first 10 digits.
+const mob = k => String(k || '').slice(0, 10);
+const fmtNo = k => '+91 ' + mob(k).slice(0, 5) + ' ' + mob(k).slice(5);
+function connectionsFor(mobile){
+  const out = new Map();
+  custCache.forEach(c => { if(mob(c.no) === mobile) out.set(c.no, c); });
+  getCustomers().forEach(c => { if(mob(c.no) === mobile && !out.has(c.no)) out.set(c.no, c); });
+  return [...out.values()].sort((a, b) => a.no.localeCompare(b.no));
+}
+
+/* ---------------- Send links ----------------
+   Each customer gets their own link to share_location.html. There is no way to
+   send WhatsApp messages straight from a web page — wa.me opens one chat at a
+   time and you press send. That is a WhatsApp restriction, not a gap here, and
+   the only way round it is the paid Business API described in the UI.
+
+   So the job of this tab is to make the manual route fast: right message, right
+   number, right link, one tap, and a record of who has already had one. */
+
+const SEND_TPL_KEY = 'lmbg_send_template_v1';
+const SEND_SENT_KEY = 'lmbg_send_sent_v1';
+const SEND_REPLYTO_KEY = 'lmbg_send_replyto_v1';
+
+const DEFAULT_TEMPLATE =
+`Hi {name}, this is {dealer}.
+
+Name: {name}
+Mobile: {mobile}
+Address: {address}
+Dealer: {dealer}
+
+So our delivery partner can find your door without calling, please share your location here:
+
+{link}
+
+This link only asks for your location — nothing else, and no payment. Thank you!`;
+// The wording before Build 22. Anyone still on it untouched is moved to the new one.
+const OLD_DEFAULT_TEMPLATE =
+`Hi {name}, this is GASDOST(BPCL).
+
+Your cylinder booking ({booking}) is out for delivery. So our delivery partner can find your door without calling, please share your location here:
+
+{link}
+
+This link only asks for your location — nothing else, and no payment. Thank you!`;
+
+let recipients = [];
+const clearedSent = {};   // sent marks cleared on this computer
+
+// "Sent" marks: this computer's own, plus whatever the database knows was
+// sent from any office computer or phone.
+function getSentMap(){
+  let m = {};
+  try{ const p = JSON.parse(localStorage.getItem(SEND_SENT_KEY)); if(p && typeof p === 'object') m = p; }catch(e){}
+  (typeof recipients !== 'undefined' ? recipients : []).forEach(r => { if(r.linkSentAt && !m[r.no] && !(r.no in clearedSent)) m[r.no] = r.linkSentAt; });
+  return m;
+}
+function setSent(no, when){
+  let m = {};
+  try{ const p = JSON.parse(localStorage.getItem(SEND_SENT_KEY)); if(p && typeof p === 'object') m = p; }catch(e){}
+  if(when === null){ delete m[no]; clearedSent[no] = 1; } else { m[no] = when; delete clearedSent[no]; }
+  try{ localStorage.setItem(SEND_SENT_KEY, JSON.stringify(m)); }catch(e){}
+  // Tell the database, so the Location tracker counts it.
+  if(when !== null && isOnline()) api('/api/ops', {method:'POST', body:{ops:[{op:'linksent', no, at: when}]}}).catch(() => {});
+}
+
+function getTemplate(){
+  try{
+    const t = localStorage.getItem(SEND_TPL_KEY);
+    // That line isn't wanted any more, even in a template saved earlier.
+    return (!t || t === OLD_DEFAULT_TEMPLATE) ? DEFAULT_TEMPLATE : t.replace(/^Your gas cylinder is out for delivery\.\r?\n/m, '');
+  }catch(e){ return DEFAULT_TEMPLATE; }
+}
+function saveTemplate(){
+  try{ localStorage.setItem(SEND_TPL_KEY, document.getElementById('msgTemplate').value); }catch(e){}
+}
+function resetTemplate(){
+  document.getElementById('msgTemplate').value = DEFAULT_TEMPLATE;
+  saveTemplate(); renderSendList();
+  toast('Wording reset');
+}
+function getReplyTo(){
+  try{ return localStorage.getItem(SEND_REPLYTO_KEY) || ''; }catch(e){ return ''; }
+}
+function saveReplyTo(){
+  const v = document.getElementById('replyTo').value.replace(/\D/g,'').slice(0,10);
+  document.getElementById('replyTo').value = v;
+  try{ localStorage.setItem(SEND_REPLYTO_KEY, v); }catch(e){}
+  renderSendList();
+}
+
+// Same link shape the delivery app builds, so the customer page behaves
+// identically whoever sent it.
+function linkFor(c){
+  const base = location.origin + location.pathname.replace(/[^/]*$/, '');
+  const reply0 = getReplyTo();
+  if(tokenMap[c.no]){
+    // Online: the link carries only a secret code. The page looks the
+    // customer up with it, and saves the location straight to the database.
+    if(/^https?:/.test(base)) return base + 'l/' + tokenMap[c.no] + (reply0.length === 10 ? '/91' + reply0 : '');
+    return base + 'share_location.html#t=' + tokenMap[c.no] + (reply0.length === 10 ? '&d=91' + reply0 : '');
+  }
+  const bits = ['c=' + encodeURIComponent(c.no)];
+  if(c.name && c.name !== 'New Customer') bits.push('n=' + encodeURIComponent(c.name));
+  if(c.booking) bits.push('b=' + encodeURIComponent(c.booking));
+  // Address and dealer let the page show the customer their own details. The
+  // unique code is deliberately never put in the link.
+  if(c.address && c.address !== 'Address pending') bits.push('a=' + encodeURIComponent(c.address));
+  if(c.dealer) bits.push('g=' + encodeURIComponent(c.dealer));
+  const reply = getReplyTo();
+  if(reply.length === 10) bits.push('d=' + encodeURIComponent('91' + reply));
+  return base + 'share_location.html#' + bits.join('&');
+}
+
+function messageFor(c){
+  return getTemplate()
+    .replace(/\{name\}/g, (c.name && c.name !== 'New Customer') ? c.name : 'there')
+    .replace(/\{booking\}/g, c.booking || '')
+    .replace(/\{mobile\}/g, '+91 ' + mob(c.no))
+    .replace(/\{address\}/g, (c.address && c.address !== 'Address pending') ? c.address : '—')
+    .replace(/\{dealer\}/g, c.dealer || 'GasDost')
+    .replace(/\{link\}/g, linkFor(c));
+}
+
+function loadRecipients(){
+  hideOtherWays();
+  const search = document.getElementById('sendSearch');
+  if(search) search.value = '';
+  const mode = document.getElementById('sendSource').value;
+  if(mode === 'batch'){
+    recipients = batch.map(b => ({no:b.n, name:b.m, booking:b.b, address:b.a, dealer:b.g}));
+  } else if(mode === 'customers'){
+    recipients = getCustomers().map(c => ({no:c.no, name:c.name, booking:'', address:c.address, dealer:c.dealer}));
+  } else {
+    const all = getBookings();
+    recipients = (mode === 'pending' ? all.filter(c => c.status !== 'delivered' && c.status !== 'shared') : all)
+      .map(c => ({no:c.no, name:c.name, booking:c.booking, address:c.address, dealer:c.dealer}));
+  }
+  if(isOnline() && mode !== 'batch'){ loadRecipientsOnline(mode); return; }
+  ensureTokens(recipients);
+  enrichRecipients();
+  renderSendList();
+}
+
+async function loadRecipientsOnline(mode){
+  recipients = [];
+  renderSendList();
+  try{
+    if(mode === 'customers'){
+      const d = await api('/api/customers?limit=1000');
+      noteCustomers(d.customers);
+      recipients = d.customers.map(c => ({no:c.no, name:c.name, booking:'', address:c.address, dealer:c.dealer}));
+      if(d.total > 1000) toast('Showing the first 1,000 of ' + d.total.toLocaleString() + ' customers — type in "Find a customer" to reach anyone else');
+    } else {
+      const d = await api('/api/bookings?filter=' + (mode === 'pending' ? 'pending' : 'all') + '&limit=2000');
+      recipients = d.bookings.map(b => ({no:b.no, name:b.name, booking:b.booking, address:b.address, dealer:b.dealer, linkSentAt:b.linkSentAt}));
+      d.bookings.forEach(b => { if(typeof b.lat === 'number' && b.status !== 'waiting') locMap[b.no] = {no:b.no, lat:b.lat, lng:b.lng, at:b.updated}; });
+    }
+  }catch(e){ toast('Could not load the list: ' + e.message); }
+  ensureTokens(recipients);
+  enrichRecipients();
+  renderSendList();
+}
+
+// Fill any gaps from the customer list — the office's copy is the best one.
+function enrichRecipients(){
+  recipients.forEach(r => {
+    const k = findCustomer(r.no);
+    if(!k) return;
+    if(!r.name || r.name === 'New Customer') r.name = k.name;
+    if(!r.address || r.address === 'Address pending') r.address = k.address;
+    if(!r.dealer) r.dealer = k.dealer;
+  });
+}
+
+// What the search box is currently showing. Progress is always counted against
+// the whole list, so filtering never makes it look like work has disappeared.
+// Typing in Send links also looks in the whole online customer list, so a
+// saved customer is found even when he isn't in the list loaded below.
+let sendSearchTimer = null, sendSearchReq = 0;
+function sendSearchInput(){
+  renderSendList();
+  clearTimeout(sendSearchTimer);
+  const raw = (document.getElementById('sendSearch').value || '').trim();
+  const digits = raw.replace(/\D/g, '');
+  const mode = (document.getElementById('sendSource') || {}).value;
+  if(!isOnline() || (raw.length < 3 && digits.length < 4)) return;
+  sendSearchTimer = setTimeout(async () => {
+    const my = ++sendSearchReq;
+    try{
+      let found = [];
+      if(mode === 'customers'){
+        found = (await api('/api/customers?q=' + encodeURIComponent(digits.length >= 4 && digits.length === raw.replace(/\s/g, '').length ? digits : raw) + '&limit=100')).customers;
+      } else if(isValidMobileNo(digits)){
+        found = (await api('/api/lookup', {method:'POST', body:{nos:[digits]}})).customers;
+      }
+      if(my !== sendSearchReq) return;
+      noteCustomers(found);
+      // A full number: get its secret link code now, so "Send a link anyway"
+      // sends the proper link straight away.
+      if(isValidMobileNo(digits)){
+        const k = found.find(c => mob(c.no) === digits);
+        const key = k ? k.no : digits;
+        if(!tokenMap[key]){
+          try{ const t = await api('/api/links', {method:'POST', body:{items:[{no:key, name:k ? k.name : '', address:k ? k.address : '', dealer:k ? k.dealer : ''}]}});
+               Object.assign(tokenMap, t.tokens); noteCustomers(t.customers); }catch(e){}
+        }
+      }
+      if(mode === 'customers'){
+        const have = new Set(recipients.map(r => r.no));
+        const add = found.filter(c => !have.has(c.no)).map(c => ({no:c.no, name:c.name, booking:'', address:c.address, dealer:c.dealer}));
+        if(add.length){ recipients = recipients.concat(add); await ensureTokens(add); }
+      }
+      renderSendList();
+    }catch(e){}
+  }, 300);
+}
+function visibleRecipients(){
+  const el = document.getElementById('sendSearch');
+  const q = (el ? el.value : '').trim().toLowerCase();
+  if(!q) return recipients;
+  const digits = q.replace(/\D/g,'');
+  return recipients.filter(r =>
+    (r.name || '').toLowerCase().includes(q) ||
+    (digits && r.no.includes(digits)) ||
+    (r.address || '').toLowerCase().includes(q) ||
+    (r.dealer || '').toLowerCase().includes(q)
+  );
+}
+
+function renderSendList(){
+  const body = document.getElementById('sendBody');
+  if(!body) return;
+  const sent = getSentMap();
+  const doneCount = recipients.filter(r => sent[r.no]).length;
+  const shown = visibleRecipients();
+
+  // offer an ad-hoc send when a full mobile number is typed that nobody has
+  const searchEl = document.getElementById('sendSearch');
+  const raw = searchEl ? searchEl.value.trim() : '';
+  const digits = raw.replace(/\D/g,'');
+  const adhoc = document.getElementById('adhocBox');
+  if(adhoc){
+    const offer = isValidMobileNo(digits) && !recipients.some(r => mob(r.no) === digits);
+    adhoc.style.display = offer ? 'block' : 'none';
+    if(offer){
+      document.getElementById('adhocNo').textContent = '+91 ' + digits.slice(0,5) + ' ' + digits.slice(5);
+      const conns = connectionsFor(digits);
+      const k = conns[0];
+      const nm = document.getElementById('adhocName');
+      if(k && !nm.value) nm.value = k.name;
+      const note = document.getElementById('adhocSaved');
+      if(note) note.textContent = k ? '✅ Saved customer: ' + k.name + (k.dealer ? ' · ' + k.dealer : '') + (conns.length > 1 ? ' (+' + (conns.length - 1) + ' more dealership)' : '') : '';
+    }
+  }
+  const countEl = document.getElementById('searchCount');
+  if(countEl){
+    countEl.textContent = raw
+      ? (shown.length ? `Showing ${shown.length} of ${recipients.length}` : 'Nobody in this list matches that')
+      : '';
+  }
+
+  document.getElementById('sendProgress').textContent =
+    doneCount + ' of ' + recipients.length + ' sent';
+  document.getElementById('sendBar').style.width =
+    (recipients.length ? Math.round(doneCount / recipients.length * 100) : 0) + '%';
+  const tabCount = document.getElementById('tabSendCount');
+  if(tabCount){
+    const left = recipients.length - doneCount;
+    tabCount.textContent = left;
+    tabCount.style.display = left ? 'inline-block' : 'none';
+  }
+  document.getElementById('sendNextBtn').disabled = doneCount >= recipients.length;
+
+  document.getElementById('msgPreview').textContent =
+    shown.length ? messageFor(shown[0]) : (recipients.length ? messageFor(recipients[0]) : 'No customers selected yet.');
+
+  if(!shown.length){
+    body.innerHTML = '<tr><td colspan="6" class="empty-row">' +
+      (recipients.length ? 'Nobody here matches that search.' : 'Nobody to send to. Pick a different list above, or add bookings first.') +
+      '</td></tr>';
+    return;
+  }
+
+  body.innerHTML = shown.map(r => {
+    const when = sent[r.no];
+    const label = (locMap[r.no] ? '<span class="pill pill-on">📍 Location received</span><br>' : '') + (when
+      ? '<span class="sent-yes">✓ Sent ' + new Date(when).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + '</span>'
+      : '<span class="sent-no">Not sent</span>');
+    return `<tr>
+      <td>${esc(r.name || 'Customer')}</td>
+      <td style="white-space:nowrap;">${fmtNo(r.no)}</td>
+      <td>${esc(r.address && r.address !== 'Address pending' ? r.address : '—')}</td>
+      <td>${esc(r.dealer || '—')}</td>
+      <td>${label}</td>
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="send-btn ${when ? 'again' : 'todo'}" onclick="sendTo('${r.no}')">${when ? 'Send again' : 'Send'}</button>
+        <button class="send-btn again" style="margin-left:6px;" onclick="showOtherWays('${r.no}')">Other ways</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function sendTo(no){
+  const c = recipients.find(r => r.no === no);
+  if(!c) return;
+  if(getReplyTo().length !== 10){
+    toast('Enter the delivery partner’s number first — customers need somewhere to reply');
+    document.getElementById('replyTo').focus();
+    return;
+  }
+  window.open('https://wa.me/91' + mob(c.no) + '?text=' + encodeURIComponent(messageFor(c)), '_blank');
+  setSent(no, Date.now());
+  renderSendList();
+}
+
+function sendNext(){
+  const sent = getSentMap();
+  const pool = visibleRecipients();
+  const next = pool.find(r => !sent[r.no]);
+  if(!next){ toast(pool.length === recipients.length ? 'Everyone on this list has had one' : 'Everyone matching that search has had one'); return; }
+  sendTo(next.no);
+}
+
+// Send to somebody who has no booking in the system yet.
+function sendAdhoc(){
+  const digits = document.getElementById('sendSearch').value.replace(/\D/g,'');
+  if(!isValidMobileNo(digits)) return;
+  if(getReplyTo().length !== 10){
+    toast('Enter the delivery partner\u2019s number first \u2014 customers need somewhere to reply');
+    document.getElementById('replyTo').focus();
+    return;
+  }
+  const name = document.getElementById('adhocName').value.trim();
+  const k = connectionsFor(digits)[0] || {};
+  const key = k.no || digits;
+  const c = {no: key, name: name || k.name || '', booking: '', address: k.address || '', dealer: k.dealer || ''};
+  window.open('https://wa.me/91' + digits + '?text=' + encodeURIComponent(messageFor(c)), '_blank');
+  setSent(key, Date.now());
+  document.getElementById('adhocName').value = '';
+  toast('Link sent to +91 ' + digits);
+  renderSendList();
+}
+
+function resetSent(){
+  if(!confirm('Clear the sent marks for this list? The messages already sent are not affected.')) return;
+  recipients.forEach(r => setSent(r.no, null));
+  renderSendList();
+  toast('Sent marks cleared');
+}
+
+function copyAllLinks(){
+  const list = visibleRecipients();
+  if(!list.length) return;
+  const text = list.map(r => r.no + '\t' + (r.name || '') + '\t' + linkFor(r)).join('\n');
+  navigator.clipboard.writeText(text)
+    .then(() => toast('Copied ' + list.length + ' links'))
+    .catch(() => toast('Could not copy — use Export to Excel instead'));
+}
+
+// The columns a WhatsApp API provider will ask for, so this file can be handed
+// straight to one of them later.
+function exportLinks(){
+  const list = visibleRecipients();
+  if(!list.length) return;
+  const rows = [['Mobile Number','Name','Booking ID','Location Link','Full Message']];
+  list.forEach(r => rows.push(['91' + r.no, r.name || '', r.booking || '', linkFor(r), messageFor(r)]));
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:14},{wch:22},{wch:16},{wch:60},{wch:70}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Links');
+  XLSX.writeFile(wb, 'gasdost_location_links.xlsx');
+  toast('Exported ' + list.length + ' links');
+}
+
+/* ---------------- fallbacks when WhatsApp will not do ----------------
+   Not every number has WhatsApp, and sometimes a message simply will not go.
+   None of these need an account or a rupee, and all of them work from a
+   desktop browser. Copying the message is the one that always works — the
+   rest depend on what the computer has set up, so we say so rather than
+   leaving a dead button. */
+
+let owCustomer = null;
+
+function showOtherWays(no){
+  owCustomer = recipients.find(r => r.no === no) || {no, name:'', booking:''};
+  document.getElementById('owName').textContent = owCustomer.name || ('+91 ' + no);
+  document.getElementById('owQrWrap').style.display = 'none';
+  document.getElementById('owNote').textContent = '';
+  document.getElementById('otherWays').style.display = 'block';
+  document.getElementById('otherWays').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+function hideOtherWays(){
+  document.getElementById('otherWays').style.display = 'none';
+  owCustomer = null;
+}
+function owNote(msg){ document.getElementById('owNote').textContent = msg; }
+
+// Clipboard needs a secure context; fall back to a hidden textarea so this
+// still works if the page is ever opened over plain http or from a file.
+function copyText(text, okMsg){
+  const done = () => { toast(okMsg); owNote('Copied. Paste it wherever you need — SMS, email, any chat app.'); };
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text).then(done).catch(() => legacyCopy(text, done));
+  } else {
+    legacyCopy(text, done);
+  }
+}
+function legacyCopy(text, done){
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:-1000px;left:-1000px;';
+  document.body.appendChild(ta);
+  ta.select();
+  try{ document.execCommand('copy'); done(); }
+  catch(e){ owNote('Could not copy automatically. Select the message in the preview above and copy it by hand.'); }
+  finally{ ta.remove(); }
+}
+
+function owCopyMessage(){
+  if(!owCustomer) return;
+  copyText(messageFor(owCustomer), 'Message copied');
+}
+function owCopyLink(){
+  if(!owCustomer) return;
+  copyText(linkFor(owCustomer), 'Link copied');
+}
+
+function owSms(){
+  if(!owCustomer) return;
+  // Android and iOS disagree about the separator; ? is what desktop handlers
+  // (Windows Phone Link, macOS Messages) expect.
+  window.open('sms:+91' + mob(owCustomer.no) + '?body=' + encodeURIComponent(messageFor(owCustomer)), '_blank');
+  setSent(owCustomer.no, Date.now());
+  renderSendList();
+  owNote('If nothing opened, this computer has no SMS app linked. On Windows that is Phone Link paired with the delivery man’s Android phone. Otherwise use "Copy whole message" and send it from a phone.');
+}
+
+function owEmail(){
+  if(!owCustomer) return;
+  const to = prompt('Customer’s email address (leave blank to open an empty draft):', '');
+  if(to === null) return;
+  const subject = 'Your GasDost cylinder delivery — please share your location';
+  window.open('mailto:' + encodeURIComponent(to) +
+    '?subject=' + encodeURIComponent(subject) +
+    '&body=' + encodeURIComponent(messageFor(owCustomer)), '_blank');
+  owNote('Opens whatever email program this computer uses. If nothing happened, no email app is set up here — copy the message instead and paste it into Gmail.');
+}
+
+function owQr(){
+  if(!owCustomer) return;
+  const wrap = document.getElementById('owQrWrap');
+  const box = document.getElementById('owQrBox');
+  box.innerHTML = '';
+  if(typeof QRCode === 'undefined'){ owNote('QR library did not load — check the connection.'); return; }
+  new QRCode(box, {text: linkFor(owCustomer), width:220, height:220, correctLevel: QRCode.CorrectLevel.M});
+  wrap.style.display = 'flex';
+  owNote('');
+}
+
+(function initSend(){
+  const tpl = document.getElementById('msgTemplate');
+  if(tpl) tpl.value = getTemplate();
+  const rt = document.getElementById('replyTo');
+  if(rt) rt.value = getReplyTo();
+  loadRecipients();
+})();
+
+/* ---------------- delivery team status (read-only view — written by the delivery app) ---------------- */
+const TEAM_KEY = 'lmbg_team_roster_v1';
+const ACTIVE_WINDOW_MS = 15 * 60 * 1000; // "active" = seen in the last 15 minutes
+
+// The demo delivery men and demo bookings older builds filled in. They are
+// cleared out on load — matched on number AND name, so a real person is never removed.
+const DEMO_TEAM = {'919820011122':'Suresh Kadam', '919820033344':'Vikram Chavan', '919820055566':'Ajay More'};
+const DEMO_BOOKINGS = {'9810012345':'Anita Sharma','9810023456':'Ravi Kumar','9810034567':'Farida Khan',
+                       '9810045678':'Suresh Iyer','9810056789':'Priya Nair','9810067890':'Mohan Desai'};
+(function clearDemoData(){
+  try{
+    const t = JSON.parse(localStorage.getItem(TEAM_KEY));
+    if(Array.isArray(t)) localStorage.setItem(TEAM_KEY, JSON.stringify(t.filter(m => DEMO_TEAM[m.phone] !== m.name)));
+    const b = JSON.parse(localStorage.getItem('lmbg_store_v1'));
+    if(Array.isArray(b)) localStorage.setItem('lmbg_store_v1', JSON.stringify(b.filter(c => DEMO_BOOKINGS[c.no] !== c.name)));
+  }catch(e){}
+})();
+
+let serverTeam = []; // delivery men reported by their phones to the online database
+
+// Everyone we know of: phones reporting online, plus anyone who used the
+// delivery app in this same browser. Newest "last seen" wins.
+function getTeam(){
+  if(isOnline()) return serverTeam.slice(); // the database knows every phone
+  let local = [];
+  try{
+    const parsed = JSON.parse(localStorage.getItem(TEAM_KEY));
+    if(Array.isArray(parsed)) local = parsed;
+  }catch(e){}
+  const byPhone = {};
+  local.concat(serverTeam).forEach(m => {
+    if(!m || !m.phone) return;
+    const old = byPhone[m.phone];
+    if(!old || (m.lastActive || 0) > (old.lastActive || 0)) byPhone[m.phone] = Object.assign({}, old, m, {name: m.name || (old && old.name) || ''});
+  });
+  return Object.values(byPhone);
+}
+/* ---------------- booking store (shared with the delivery app) ---------------- */
+const STORE_KEY = 'lmbg_store_v1';
+const LAST_UPLOAD_KEY = 'lmbg_last_office_upload_v1';
+const DEPOT = [19.2183, 72.9781]; // Thane — where office-uploaded bookings start until a location is set
+
+function getBookings(){
+  try{
+    const parsed = JSON.parse(localStorage.getItem(STORE_KEY));
+    if(Array.isArray(parsed)) return parsed;
+  }catch(e){}
+  return []; // nothing yet — the delivery app seeds this on first open
+}
+function saveBookings(list){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(list)); }catch(e){}
+}
+function getLastUpload(){
+  try{
+    const raw = localStorage.getItem(LAST_UPLOAD_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return null;
+}
+
+// Pushes the batch straight into the shared booking store, so it lands on the
+// delivery man's dashboard without him scanning anything. Uploaded bookings are
+// left unassigned — whoever delivers one gets the credit.
+async function uploadBatch(){
+  if(!batch.length) return;
+  const summaryEl = document.getElementById('uploadSummary');
+  if(isOnline()){
+    const sel = document.getElementById('assignTo');
+    const assignTo = sel ? sel.value : '';
+    if(assignTo === '__'){
+      sel.classList.add('need-pick'); sel.focus();
+      toast('Choose a delivery man first');
+      return;
+    }
+    try{
+      const d = await api('/api/bookings', {method:'POST', body:{
+        bookings: batch.map(b => ({no:b.n, name:b.m, address:b.a, dealer:b.g, booking:b.b})), assignTo}});
+      const who = assignTo && sel ? sel.options[sel.selectedIndex].text.replace(/^For: /, '') : 'any delivery man';
+      summaryEl.style.display = 'block';
+      summaryEl.innerHTML = `✅ Uploaded <b>${d.added}</b> booking${d.added===1?'':'s'} for <b>${esc(who)}</b>. They reach his phone within 30 seconds.`;
+      batch = []; renderBatch(); hideQr(); renderBookingSearch();
+      sel.value = '__';
+      toast('Uploaded ' + d.added + ' booking' + (d.added===1?'':'s'));
+      refreshOnline();
+    }catch(e){ toast('Could not upload: ' + e.message); }
+    return;
+  }
+  const list = getBookings();
+  let added = 0, duplicate = 0;
+
+  batch.forEach(b=>{
+    if(list.find(c=>c.no===b.n)){ duplicate++; return; }
+    list.push({
+      no:b.n, name:b.m, phone:b.p, address:b.a || 'Address pending', dealer:b.g || '', booking:b.b,
+      status:'waiting', lat:DEPOT[0], lng:DEPOT[1], updated:null,
+      assignedTo:null, deliveredBy:null, deliveredAt:null, source:'office'
+    });
+    added++;
+  });
+
+  saveBookings(list);
+  // Only stamp the record when something actually landed — an all-duplicates
+  // upload shouldn't wipe the notice about the real one before it.
+  if(added){
+    try{
+      localStorage.setItem(LAST_UPLOAD_KEY, JSON.stringify({count:added, at:Date.now(), total:list.length}));
+    }catch(e){}
+  }
+
+  summaryEl.style.display = 'block';
+  summaryEl.innerHTML = `✅ Uploaded <b>${added}</b> booking${added===1?'':'s'} to the delivery app` +
+    (duplicate ? ` — skipped ${duplicate} already there` : '') +
+    `. ${added ? 'They\'re on the delivery man\'s dashboard now.' : ''}`;
+
+  if(added){
+    batch = [];
+    renderBatch();
+    hideQr();
+  }
+  renderTeam();
+  toast(added ? `Uploaded ${added} booking${added===1?'':'s'}` : 'Nothing new to upload');
+}
+
+function esc(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function fmtAgo(ts){
+  if(!ts) return '—';
+  const mins = Math.round((Date.now() - ts)/60000);
+  if(mins < 1) return 'just now';
+  if(mins < 60) return mins+' min ago';
+  return Math.round(mins/60)+' hr ago';
+}
+
+// Rolls bookings up per delivery man. A booking counts toward whoever it's
+// assigned to; if it's unassigned but somebody marked it delivered, it counts
+// toward them instead. Anything left over lands in an "Unassigned" row.
+function fillAssignList(){
+  try{ fillHistoryWho(); loadDealers(); }catch(e){}
+  const sel = document.getElementById('assignTo');
+  if(!sel) return;
+  const keep = sel.value;
+  const team = getTeam().slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  sel.innerHTML = '<option value="__">👉 Choose delivery man</option>' +
+    team.map(m => `<option value="${esc(m.phone)}">For: ${esc(m.name || ('+' + m.phone))}</option>`).join('') +
+    '<option value="">For: any delivery man (everyone sees it)</option>';
+  sel.value = [...sel.options].some(o => o.value === keep) ? keep : '__';
+  sel.onchange = () => sel.classList.remove('need-pick');
+}
+
+function buildDeliveryStatus(){
+  if(isOnline() && serverStatus) return buildDeliveryStatusOnline();
+  const bookings = getBookings();
+  const team = getTeam();
+  const now = Date.now();
+
+  const byPhone = {};
+  team.forEach(m=>{
+    byPhone[m.phone] = {
+      phone: m.phone, name: m.name,
+      active: (now - m.lastActive) < ACTIVE_WINDOW_MS,
+      lastActive: m.lastActive,
+      delivered: 0, pending: 0
+    };
+  });
+  const unassigned = {phone:null, name:'Unassigned', active:null, lastActive:null, delivered:0, pending:0};
+
+  bookings.forEach(b=>{
+    const isDelivered = b.status === 'delivered';
+    const owner = b.assignedTo || (isDelivered ? b.deliveredBy : null);
+    let bucket = unassigned;
+    if(owner){
+      if(!byPhone[owner]){
+        // A delivery man who isn't in the roster yet (e.g. logged in on a new phone).
+        byPhone[owner] = {phone:owner, name:'+'+owner.slice(0,2)+' '+owner.slice(2), active:false, lastActive:null, delivered:0, pending:0};
+      }
+      bucket = byPhone[owner];
+    }
+    if(isDelivered) bucket.delivered++; else bucket.pending++;
+  });
+
+  const rows = Object.values(byPhone);
+  if(unassigned.delivered || unassigned.pending) rows.push(unassigned);
+
+  const totals = rows.reduce((acc,r)=>{
+    acc.delivered += r.delivered; acc.pending += r.pending; return acc;
+  }, {delivered:0, pending:0});
+  totals.total = totals.delivered + totals.pending;
+  totals.rate = totals.total ? Math.round(totals.delivered / totals.total * 100) : 0;
+  totals.activeMen = rows.filter(r=>r.active).length;
+  totals.teamSize = team.length;
+
+  // Busiest first, then most delivered — puts whoever's carrying the load on top.
+  rows.sort((a,b)=>
+    (b.delivered + b.pending) - (a.delivered + a.pending) ||
+    b.delivered - a.delivered
+  );
+
+  return {rows, totals};
+}
+
+// Same table, counted by the database from every phone: open bookings and
+// what was delivered today.
+function buildDeliveryStatusOnline(){
+  const team = getTeam();
+  const now = Date.now();
+  const byPhone = {};
+  team.forEach(m => {
+    byPhone[m.phone] = {phone:m.phone, name:m.name, active:(now - m.lastActive) < ACTIVE_WINDOW_MS, lastActive:m.lastActive, delivered:0, pending:0};
+  });
+  const unassigned = {phone:null, name:'Unassigned', active:null, lastActive:null, delivered:0, pending:0};
+  const office = {phone:'office', office:true, name:'🏢 With office', active:null, lastActive:null, delivered:0, pending:0, waiting:0};
+  const gone = {}; // logged out / removed, but still has bookings today
+  const names = serverStatus.names || {};
+  unassigned.waiting = 0;
+  Object.values(byPhone).forEach(r => { r.waiting = 0; });
+  serverStatus.rows.forEach(r => {
+    let bucket = unassigned;
+    if(r.who === 'office') bucket = office;
+    else if(r.who && byPhone[r.who]) bucket = byPhone[r.who];
+    else if(r.who){
+      bucket = gone[r.who] = gone[r.who] || {phone:r.who, gone:true, name: names[r.who] || ('+'+r.who.slice(0,2)+' '+r.who.slice(2)), active:false, lastActive:null, delivered:0, pending:0, waiting:0};
+    }
+    bucket.delivered += r.delivered; bucket.pending += r.pending; bucket.waiting += (r.waiting || 0);
+  });
+  const rows = Object.values(byPhone);
+  // Logged-out men stay listed only while bookings still wait on them;
+  // what they delivered today is summed into one line.
+  const goneDone = {phone:'gone', goneSum:true, name:'👋 Logged out today', active:null, lastActive:null, delivered:0, pending:0, waiting:0};
+  Object.values(gone).forEach(g => { if(g.pending) rows.push(g); else goneDone.delivered += g.delivered; });
+  if(unassigned.delivered || unassigned.pending) rows.push(unassigned);
+  if(office.delivered || office.pending) rows.push(office);
+  if(goneDone.delivered) rows.push(goneDone);
+  const totals = rows.reduce((a, r) => { a.delivered += r.delivered; a.pending += r.pending; a.waiting += (r.waiting || 0); return a; }, {delivered:0, pending:0, waiting:0});
+  totals.total = totals.delivered + totals.pending;
+  totals.rate = totals.total ? Math.round(totals.delivered / totals.total * 100) : 0;
+  totals.activeMen = rows.filter(r => r.active).length;
+  totals.teamSize = team.length;
+  rows.sort((a, b) => (!!a.goneSum) - (!!b.goneSum) || (b.delivered + b.pending) - (a.delivered + a.pending) || b.delivered - a.delivered || (a.name || '').localeCompare(b.name || ''));
+  return {rows, totals};
+}
+
+// Per-dealership counts (online only).
+function renderDealers(){
+  const wrap = document.getElementById('dealerWrap');
+  if(!wrap) return;
+  const list = isOnline() && serverStatus && serverStatus.dealers ? serverStatus.dealers.slice() : [];
+  document.getElementById('menHeading').style.display = list.length ? 'block' : 'none';
+  if(!list.length){ wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  list.sort((a, b) => (!a.dealer) - (!b.dealer) || (b.delivered + b.pending) - (a.delivered + a.pending) || a.dealer.localeCompare(b.dealer));
+  const btn = (n, view, d) => n ? `<button class="num-btn" onclick='showBookingsBehind("${view}","",${JSON.stringify(d.dealer)})' title="See these bookings">${n}</button>` : '0';
+  document.getElementById('dealerBody').innerHTML = list.map(d => {
+    const total = d.delivered + d.pending;
+    const rate = total ? Math.round(d.delivered / total * 100) : 0;
+    return `<tr>
+      <td>${d.dealer ? esc(d.dealer) : '<span class="muted">No dealership</span>'}</td>
+      <td class="num" style="color:var(--green);">${btn(d.delivered, 'delivered', d)}</td>
+      <td class="num" style="color:var(--amber);">${btn(d.pending, 'pending', d)}</td>
+      <td class="num wait-num">${btn(d.waiting || 0, 'waiting', d)}</td>
+      <td class="num">${btn(total, 'all', d)}</td>
+      <td><div style="display:flex;align-items:center;gap:8px;"><div class="bar-mini"><div style="width:${rate}%;"></div></div><span class="muted" style="font-size:12px;">${rate}%</span></div></td>
+    </tr>`;
+  }).join('');
+}
+
+// A number in the table that opens the bookings behind it.
+function numBtn(n, view, r){
+  if(!isOnline() || !n || r.goneSum) return String(n);
+  const who = r.phone === null ? 'unassigned' : r.phone;
+  return `<button class="num-btn" onclick="showBookingsBehind('${view}','${who}')" title="See these bookings">${n}</button>`;
+}
+
+let behindNow = null, behindList = [];
+// Sends the customer their location link again on WhatsApp. Replies go to the
+// delivery man the booking is with (or the number in Send links).
+async function resendLink(no){
+  const b = behindList.find(x => x.no === no) || trkRows.find(x => x.no === no);
+  if(!b) return;
+  const reply = /^91\d{10}$/.test(b.assignedTo || '') ? b.assignedTo.slice(2) : getReplyTo();
+  if(reply.length !== 10){ toast('Enter the delivery partner’s number in Send links first'); return; }
+  try{
+    if(!tokenMap[no]){
+      const d = await api('/api/links', {method:'POST', body:{items:[{no, name:b.name, address:b.address, dealer:b.dealer}]}});
+      Object.assign(tokenMap, d.tokens || {});
+    }
+  }catch(e){ toast('Could not make the link: ' + e.message); return; }
+  const keep = getReplyTo();
+  try{ localStorage.setItem(SEND_REPLYTO_KEY, reply); }catch(e){}
+  const el = document.getElementById('replyTo'); const old = el ? el.value : '';
+  if(el) el.value = reply;
+  const text = messageFor({no, name:b.name, booking:b.booking, address:b.address, dealer:b.dealer});
+  if(el) el.value = old;
+  try{ localStorage.setItem(SEND_REPLYTO_KEY, keep); }catch(e){}
+  window.open('https://wa.me/91' + mob(no) + '?text=' + encodeURIComponent(text), '_blank');
+  setSent(no, Date.now());
+  toast('Link sent to ' + (b.name || no));
+  setTimeout(loadTracker, 1500);
+}
+async function showBookingsBehind(view, who, dealer){
+  if(!isOnline()){ toast('Connect to the online database first'); return; }
+  const card = document.getElementById('behindCard');
+  behindNow = {view, who, dealer};
+  const m = who && who !== 'unassigned' ? getTeam().find(x => x.phone === who) : null;
+  const person = who === 'unassigned' ? 'Unassigned' : who === 'office' ? '🏢 With office' : who ? ((m && m.name) || ('+' + who)) : 'Everyone';
+  const label = {pending:'Pending', waiting:'Waiting for location', delivered:'Delivered today', all:'All bookings'}[view];
+  document.getElementById('behindTitle').textContent = label + ' — ' + (dealer != null ? '🏪 ' + (dealer || 'No dealership') : person);
+  document.getElementById('behindCount').textContent = 'Loading…';
+  document.getElementById('behindBody').innerHTML = '';
+  card.style.display = 'block';
+  card.scrollIntoView({behavior:'smooth', block:'start'});
+  try{
+    const d = await api('/api/bookings?view=' + view + '&who=' + encodeURIComponent(who) + (dealer != null ? '&dealer=' + encodeURIComponent(dealer) : ''));
+    behindList = d.bookings;
+    document.getElementById('behindCount').textContent = d.bookings.length + ' booking' + (d.bookings.length===1?'':'s');
+    const when = t => t ? new Date(t).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+    document.getElementById('behindBody').innerHTML = d.bookings.length ? d.bookings.map(b => {
+      const st = b.status === 'delivered'
+        ? `<span class="pill pill-on">✅ Delivered ${esc(when(b.deliveredAt))}</span>`
+        : b.status === 'shared' ? '<span class="pill" style="background:#e4efff;color:#0850c4;">📍 Location received</span>'
+        : '<span class="pill pill-off">Waiting for location</span>';
+      const man = b.status === 'delivered' ? (b.deliveredName || b.assignedName)
+        : b.assignedTo === 'office' ? '🏢 Office' : b.assignedName;
+      const pin = typeof b.lat === 'number' && b.status !== 'waiting'
+        ? ` <a href="https://maps.google.com/?q=${b.lat},${b.lng}" target="_blank" rel="noopener" title="Open on map">🗺️</a>` : '';
+      return `<tr>
+        <td>${b.status === 'delivered' ? '' : `<input type="checkbox" class="bk-sel" value="${esc(b.no)}" onchange="updateBulkBar()">`}</td>
+        <td>${esc(b.name || '—')}</td>
+        <td style="white-space:nowrap;">${fmtNo(b.no)}</td>
+        <td>${esc(b.address || '—')}${pin}</td>
+        <td>${esc(b.dealer || '—')}</td>
+        <td>${st}</td>
+        <td>${esc(man || '—')}</td>
+        <td style="white-space:nowrap;">${b.status === 'waiting' ? `<button class="send-btn todo" style="margin-right:4px;" onclick="resendLink('${b.no}')">📤 Resend link</button>` : ''}${b.status === 'delivered' ? '' : moveControls(b)}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="8" class="empty-row">No bookings here.</td></tr>';
+    document.getElementById('bkSelAll').checked = false;
+    updateBulkBar();
+  }catch(e){ document.getElementById('behindCount').textContent = 'Could not load: ' + e.message; }
+}
+
+/* ---- Select several bookings: cancel or move them together ---- */
+function selectedBehind(){ return [...document.querySelectorAll('#behindBody .bk-sel:checked')].map(x => x.value); }
+function selectAllBehind(on){
+  document.querySelectorAll('#behindBody .bk-sel').forEach(x => { x.checked = on; });
+  document.getElementById('bkSelAll').checked = on;
+  updateBulkBar();
+}
+function updateBulkBar(){
+  const sel = selectedBehind();
+  const bar = document.getElementById('bulkBar');
+  bar.style.display = sel.length ? 'flex' : 'none';
+  if(!sel.length) return;
+  document.getElementById('bulkCount').textContent = sel.length + ' selected';
+  const team = getTeam().slice().sort((x, y) => (x.name || '').localeCompare(y.name || ''));
+  document.getElementById('bulkMove').innerHTML = '<option value="__">🔄 Move selected to…</option>' +
+    team.map(m => `<option value="${esc(m.phone)}">${esc(m.name || ('+' + m.phone))}</option>`).join('') +
+    '<option value="office">🏢 Office (hold)</option><option value="">Any delivery man</option>';
+}
+async function sendOpsInParts(ops){
+  for(let i = 0; i < ops.length; i += 400) await api('/api/ops', {method:'POST', body:{ops: ops.slice(i, i + 400)}});
+}
+async function bulkCancel(){
+  const sel = selectedBehind();
+  if(!sel.length) return;
+  if(!confirm('Cancel ' + sel.length + ' booking' + (sel.length === 1 ? '' : 's') + '? They disappear from the delivery men\'s phones within about a minute.')) return;
+  try{
+    await sendOpsInParts(sel.map(no => ({op:'cancel', no})));
+    toast(sel.length + ' booking' + (sel.length === 1 ? '' : 's') + ' cancelled');
+    await afterBookingChange();
+  }catch(e){ toast('Could not cancel: ' + e.message); }
+}
+async function bulkMove(selEl){
+  const to = selEl.value;
+  if(to === '__') return;
+  const sel = selectedBehind();
+  const label = selEl.options[selEl.selectedIndex].textContent.trim();
+  selEl.value = '__';
+  if(!sel.length) return;
+  try{
+    await sendOpsInParts(sel.map(no => ({op:'assign', no, to})));
+    toast(sel.length + ' booking' + (sel.length === 1 ? '' : 's') + ' moved to ' + label);
+    await afterBookingChange();
+  }catch(e){ toast('Could not move: ' + e.message); }
+}
+
+// Move an open booking to another delivery man / the office, or cancel it.
+function moveControls(b){
+  const cur = b.assignedTo || '';
+  const team = getTeam().slice().sort((x, y) => (x.name || '').localeCompare(y.name || ''));
+  const opt = (v, t) => `<option value="${esc(v)}"${v === cur ? ' disabled' : ''}>${esc(t)}${v === cur ? ' ✓' : ''}</option>`;
+  return `<select class="move-sel" onchange="moveBooking('${b.no}', this)">
+      <option value="__">🔄 Move to…</option>
+      ${team.map(m => opt(m.phone, m.name || ('+' + m.phone))).join('')}
+      ${opt('office', '🏢 Office (hold)')}
+      ${opt('', 'Any delivery man')}
+    </select>
+    <button class="send-btn again" style="margin-left:4px;" onclick="cancelBooking('${b.no}')">✖ Cancel</button>`;
+}
+async function moveBooking(no, sel){
+  const to = sel.value;
+  if(to === '__') return;
+  const label = sel.options[sel.selectedIndex].textContent.trim();
+  sel.disabled = true;
+  try{
+    await api('/api/ops', {method:'POST', body:{ops:[{op:'assign', no, to}]}});
+    toast('Booking ' + no + ' moved to ' + label);
+    await afterBookingChange();
+  }catch(e){ toast('Could not move: ' + e.message); sel.disabled = false; sel.value = '__'; }
+}
+async function cancelBooking(no){
+  if(!confirm('Cancel the booking for ' + no + '? It disappears from the delivery man\'s phone within about a minute.')) return;
+  try{
+    await api('/api/ops', {method:'POST', body:{ops:[{op:'cancel', no}]}});
+    toast('Booking ' + no + ' cancelled');
+    await afterBookingChange();
+  }catch(e){ toast('Could not cancel: ' + e.message); }
+}
+async function afterBookingChange(){
+  try{ await refreshOnline(); }catch(e){}
+  if(behindNow) showBookingsBehind(behindNow.view, behindNow.who, behindNow.dealer);
+}
+
+/* ---- Customers without a mobile number ---- */
+let missingOffset = 0, missingRows = [];
+async function loadMissing(){
+  const card = document.getElementById('missingCard');
+  if(!card || !isOnline()) return;
+  try{
+    const q = (document.getElementById('missingSearch').value || '').trim();
+    const dsel = document.getElementById('missingDealer');
+    const dv = dsel.value;
+    const d = await api('/api/missing?offset=' + missingOffset + '&limit=100&q=' + encodeURIComponent(q) + (dv !== '__all' ? '&dealer=' + encodeURIComponent(dv) : ''));
+    dsel.innerHTML = '<option value="__all">All dealerships (' + d.all.toLocaleString('en-IN') + ')</option>' +
+      (d.dealers || []).map(x => `<option value="${esc(x.dealer)}">${esc(x.dealer || 'No dealership')} (${x.n.toLocaleString('en-IN')})</option>`).join('');
+    dsel.value = [...dsel.options].some(o => o.value === dv) ? dv : '__all';
+    // Keep the card while there is a "who filled" history to look at.
+    let filledAny = false;
+    try{ filledAny = (await api('/api/missing/filled?limit=1')).filled.length > 0; }catch(e){}
+    card.style.display = d.all || filledAny ? 'block' : 'none';
+    document.getElementById('filledBox').style.display = filledAny ? '' : 'none';
+    if(filledAny && document.getElementById('filledBox').open) loadFilled();
+    document.getElementById('missingCount').textContent = d.all.toLocaleString('en-IN') + ' waiting for a mobile number';
+    missingRows = d.rows;
+    const from = d.total ? missingOffset + 1 : 0, to = missingOffset + d.rows.length;
+    document.getElementById('missingShowing').innerHTML = d.total
+      ? `Showing ${from.toLocaleString()}–${to.toLocaleString()} of ${d.total.toLocaleString()}` +
+        (missingOffset > 0 ? ` <button class="btn btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="missingOffset=Math.max(0,missingOffset-100);loadMissing()">◀ Previous</button>` : '') +
+        (to < d.total ? ` <button class="btn btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="missingOffset+=100;loadMissing()">Next ▶</button>` : '')
+      : 'Nobody matches that search.';
+    document.getElementById('missingBody').innerHTML = d.rows.map(r => `<tr id="mm_${r.id}">
+      <td>${esc(r.name)}</td>
+      <td>${esc(r.address || '—')}</td>
+      <td>${esc(r.dealer || '—')}</td>
+      <td><input class="mm-input" id="mmno_${r.id}" inputmode="numeric" maxlength="14" placeholder="10-digit mobile" value="${esc(r.badMobile || '')}"
+            onkeydown="if(event.key==='Enter')fixMissingRow('${r.id}')">
+          ${r.badMobile ? `<div class="mm-note">In the file: "${esc(r.badMobile)}" — please correct</div>` : ''}<div class="mm-note" id="mmmsg_${r.id}"></div></td>
+      <td style="white-space:nowrap;text-align:right;">
+        <button class="send-btn todo" onclick="fixMissingRow('${r.id}')">💾 Save</button>
+        <button class="send-btn again" style="margin-left:4px;" onclick="deleteMissingRow('${r.id}')" title="Remove from this list">🗑</button>
+      </td>
+    </tr>`).join('');
+  }catch(e){ /* try again on the next refresh */ }
+}
+async function fixMissingRow(id, force){
+  const inp = document.getElementById('mmno_' + id), msg = document.getElementById('mmmsg_' + id);
+  msg.textContent = '';
+  inp.classList.remove('bad');
+  try{
+    const d = await api('/api/missing/' + id + '/fix', {method:'POST', body:{no: inp.value, force: !!force}});
+    if(d.error){ inp.classList.add('bad'); msg.textContent = d.error; inp.focus(); return; }
+    if(d.taken){
+      inp.classList.add('bad');
+      const t = d.taken;
+      msg.innerHTML = `This number already belongs to <b>${esc(t.name || 'a customer')}</b>${t.dealer ? ' (' + esc(t.dealer) + ')' : ''}. ` +
+        `<a href="#" onclick="if(confirm('Replace ${esc((t.name || '').replace(/'/g, ''))} with this customer\'s name and address?'))fixMissingRow('${id}', true);return false;">Replace it</a> or type a different number.`;
+      return;
+    }
+    const row = missingRows.find(r => r.id === id);
+    toast('Saved ' + (row ? row.name : '') + ' — +91 ' + d.no);
+    custTotalAll = (custTotalAll || 0) + (d.added || 0);
+    loadMissing(); renderCustomers();
+  }catch(e){ msg.textContent = 'Could not save: ' + e.message; }
+}
+async function loadFilled(){
+  try{
+    const d = await api('/api/missing/filled?limit=100');
+    document.getElementById('filledBody').innerHTML = d.filled.map(f => `<tr>
+      <td style="white-space:nowrap;">${esc(new Date(f.at).toLocaleString('en-IN', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'}))}</td>
+      <td>${esc(f.name)}</td><td>${esc(f.no)}</td><td>${esc(f.dealer)}</td>
+      <td>${f.by && f.by !== 'Office' ? '🚚 ' + esc(f.by) : '🏢 Office'}</td></tr>`).join('');
+  }catch(e){}
+}
+async function deleteMissingRow(id){
+  const row = missingRows.find(r => r.id === id);
+  if(!confirm('Remove ' + (row ? row.name : 'this customer') + ' from the missing-mobile list?')) return;
+  try{ await api('/api/missing/' + id, {method:'DELETE'}); loadMissing(); }catch(e){ toast('Could not remove: ' + e.message); }
+}
+async function clearMissingList(){
+  if(!confirm('Remove everyone from the missing-mobile list? Saved customers are not touched.')) return;
+  try{ await api('/api/missing', {method:'DELETE', body:{confirm:'CLEAR'}}); missingOffset = 0; loadMissing(); toast('Missing-mobile list cleared'); }
+  catch(e){ toast('Could not clear: ' + e.message); }
+}
+// Same columns as the customer template, so it can be filled and uploaded again.
+async function downloadMissing(){
+  let all = [];
+  try{
+    for(let off = 0; ; off += 5000){
+      const dv = document.getElementById('missingDealer').value;
+      const d = await api('/api/missing?offset=' + off + '&limit=5000' + (dv !== '__all' ? '&dealer=' + encodeURIComponent(dv) : ''));
+      all = all.concat(d.rows);
+      if(all.length >= d.total || !d.rows.length) break;
+    }
+  }catch(e){ toast('Could not download: ' + e.message); return; }
+  if(!all.length){ toast('Nothing to download'); return; }
+  // The last column lets a corrected sheet update these same rows instead of adding new ones.
+  const rows = [['Name', 'Mobile Number', 'First Address', 'Dealer Name', 'Missing ID (do not change)']].concat(all.map(r => [r.name, r.badMobile || '', r.address, r.dealer, r.id]));
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:24},{wch:16},{wch:45},{wch:22},{wch:22}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Customers');
+  const dv = document.getElementById('missingDealer').value;
+  XLSX.writeFile(wb, 'gasdost_missing_mobile' + (dv !== '__all' && dv ? '_' + dv.replace(/[^A-Za-z0-9]+/g, '_') : '') + '.xlsx');
+  toast('Downloaded ' + all.length + ' customers — fill the mobile numbers and upload again');
+}
+
+/* ---- Location tracker ---- */
+let trkData = null, trkRows = [], trkListNow = null;
+function trkRange(){
+  const v = document.getElementById('trkPeriod').value, now = new Date();
+  if(v === 'customers') return '&scope=customers';
+  if(v === 'current') return '';
+  let f = new Date(now);
+  if(v === '7') f.setDate(f.getDate() - 6);
+  else if(v === 'month') f = new Date(now.getFullYear(), now.getMonth(), 1);
+  return '&from=' + ymd(f) + '&to=' + ymd(now);
+}
+async function loadTracker(){
+  if(!isOnline() || !document.getElementById('trkTiles')) return;
+  try{
+    trkData = await api('/api/tracker?x=1' + trkRange());
+    // Dealership list for the filter.
+    const sel = document.getElementById('trkDealer'), keep = sel.value;
+    const names = {};
+    trkData.rows.concat(trkData.saved).forEach(r => { if(r.dealer) names[r.dealer.toLowerCase()] = r.dealer; });
+    sel.innerHTML = '<option value="">All dealerships</option>' + Object.values(names).sort().map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+    sel.value = keep;
+    renderTracker();
+    if(trkListNow) showTrackerList(trkListNow.key, trkListNow.dealer, true);
+  }catch(e){ /* next refresh */ }
+}
+function renderTracker(){
+  if(!trkData) return;
+  const dsel = document.getElementById('trkDealer').value.toLowerCase();
+  const rows = trkData.rows.filter(r => !dsel || r.key === dsel);
+  const sum = k => rows.reduce((a, r) => a + (r[k] || 0), 0);
+  const t = {total:sum('total'), sent:sum('sent'), opened:sum('opened'), pinned:sum('pinned'), pinned_link:sum('pinned_link'),
+             pinned_other:sum('pinned_other'), sent_not_pinned:sum('sent_not_pinned'), not_sent:sum('not_sent')};
+  const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+  const dArg = dsel ? JSON.stringify(document.getElementById('trkDealer').value) : 'null';
+  const isCust = document.getElementById('trkPeriod').value === 'customers';
+  const unit = isCust ? 'Customers' : 'Bookings';
+  document.getElementById('trkUnitHead').textContent = unit;
+  const tile = (cls, key, n, label, extra) => `<button class="trk-tile ${cls}" onclick='showTrackerList("${key}", ${dArg})'>
+      <div class="n">${n}</div><div class="l">${label}</div>${extra ? `<div class="x">${extra}</div>` : ''}</button>`;
+  document.getElementById('trkTiles').innerHTML =
+    tile('', 'total', t.total.toLocaleString('en-IN'), unit) +
+    tile('', 'sent', t.sent, '📤 Link sent', pct(t.sent, t.total) + (isCust ? '% of customers' : '% of bookings')) +
+    tile('', 'opened', t.opened, '👀 Link opened', t.sent ? pct(t.opened, t.sent) + '% of sent' : '') +
+    tile('trk-ok', 'pinned', t.pinned, '✅ Pinned — complete', t.pinned_link + ' via link · ' + t.pinned_other + ' other ways') +
+    tile('trk-wait', 'sent_not_pinned', t.sent_not_pinned, '⏳ Sent, not pinned', t.sent ? pct(t.pinned_link, t.sent) + '% of sent links pinned' : '') +
+    tile('trk-not', 'not_sent', t.not_sent, '✉️ Link not sent yet', 'and not pinned');
+  document.getElementById('trkBar').style.width = pct(t.pinned, t.total) + '%';
+  // Doorsteps saved (all customers).
+  const sv = trkData.saved.filter(r => !dsel || r.key === dsel);
+  const sc = sv.reduce((a, r) => a + r.customers, 0), ss = sv.reduce((a, r) => a + r.saved, 0);
+  document.getElementById('trkSaved').textContent = sc ? '🏠 Doorsteps saved: ' + ss.toLocaleString('en-IN') + ' of ' + sc.toLocaleString('en-IN') + ' customers (' + pct(ss, sc) + '%)' : '';
+  // Dealer table.
+  const savedBy = {}; trkData.saved.forEach(r => { savedBy[r.key] = r; });
+  const list = rows.slice().sort((a, b) => (!a.dealer) - (!b.dealer) || b.total - a.total);
+  const nb = (n, key, r) => n ? `<button class="num-btn" onclick='showTrackerList("${key}", ${JSON.stringify(r.dealer)})'>${n}</button>` : '0';
+  document.getElementById('trkBody').innerHTML = list.length ? list.map(r => {
+    const sd = savedBy[r.key];
+    const p = pct(r.pinned, r.total);
+    return `<tr>
+      <td>${r.dealer ? esc(r.dealer) : '<span class="muted">No dealership</span>'}</td>
+      <td class="num">${nb(r.total, 'total', r)}</td>
+      <td class="num">${nb(r.sent, 'sent', r)}</td>
+      <td class="num">${nb(r.opened, 'opened', r)}</td>
+      <td class="num" style="color:var(--green);">${nb(r.pinned_link, 'pinned_link', r)}</td>
+      <td class="num" style="color:var(--green);">${nb(r.pinned_other, 'pinned_other', r)}</td>
+      <td class="num wait-num">${nb(r.sent_not_pinned, 'sent_not_pinned', r)}</td>
+      <td class="num" style="color:#b91c1c;">${nb(r.not_sent, 'not_sent', r)}</td>
+      <td><div style="display:flex;align-items:center;gap:8px;"><div class="bar-mini"><div style="width:${p}%;"></div></div><span class="muted" style="font-size:12px;">${p}%</span></div></td>
+      <td class="num muted" style="white-space:nowrap;">${sd ? sd.saved.toLocaleString('en-IN') + ' / ' + sd.customers.toLocaleString('en-IN') : '—'}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="10" class="empty-row">No bookings here.</td></tr>';
+}
+const TRK_LABEL = {total:'All bookings', sent:'📤 Link sent', opened:'👀 Link opened', pinned:'✅ Pinned — complete', pinned_link:'✅ Pinned via link',
+  pinned_other:'📍 Pinned other ways', sent_not_pinned:'⏳ Sent, not pinned', not_sent:'✉️ Link not sent yet'};
+async function showTrackerList(key, dealer, quiet){
+  trkListNow = {key, dealer};
+  const wrap = document.getElementById('trkListWrap');
+  const isCust = document.getElementById('trkPeriod').value === 'customers';
+  document.getElementById('trkListTitle').textContent = (key === 'total' && isCust ? 'All saved customers' : TRK_LABEL[key]) + ' — ' + (dealer != null ? '🏪 ' + (dealer || 'No dealership') : 'All dealerships');
+  if(!quiet){ document.getElementById('trkListCount').textContent = 'Loading…'; document.getElementById('trkListBody').innerHTML = ''; }
+  wrap.style.display = 'block';
+  if(!quiet) wrap.scrollIntoView({behavior:'smooth', block:'start'});
+  try{
+    const d = await api('/api/tracker?list=' + key + (dealer != null ? '&dealer=' + encodeURIComponent(dealer) : '') + trkRange());
+    trkRows = d.bookings;
+    document.getElementById('trkListCount').textContent = (trkRows.length >= 5000 ? 'First 5,000 ' : '') + trkRows.length.toLocaleString('en-IN') + (isCust ? ' customer' : ' booking') + (trkRows.length === 1 ? '' : 's');
+    const when = t => t ? new Date(t).toLocaleString('en-IN', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'}) : '';
+    document.getElementById('trkListBody').innerHTML = trkRows.length ? trkRows.map(b => {
+      const loc = b.pinVia === 'link' ? '<span class="pill pill-on">✅ Pinned via link</span>'
+        : b.pinVia ? '<span class="pill pill-on">📍 Pinned (' + (b.pinVia === 'phone' ? 'delivery man' : 'saved doorstep') + ')</span>'
+        : '<span class="pill pill-off">⏳ Not pinned</span>';
+      return `<tr>
+        <td>${esc(b.name || '—')}</td>
+        <td style="white-space:nowrap;">${fmtNo(b.no)}</td>
+        <td>${esc(b.dealer || '—')}</td>
+        <td style="white-space:nowrap;">${b.linkSentAt ? esc(when(b.linkSentAt)) + '<div class="muted" style="font-size:11.5px;">by ' + esc(b.linkSentName || (b.linkSentBy ? '+' + b.linkSentBy : '—')) + '</div>' : '<span class="muted">Not sent</span>'}</td>
+        <td style="white-space:nowrap;">${b.linkOpenedAt ? '👀 ' + esc(when(b.linkOpenedAt)) : '<span class="muted">—</span>'}</td>
+        <td>${loc}</td>
+        <td>${esc(b.customer ? '—' : b.assignedTo === 'office' ? '🏢 Office' : (b.assignedName || '—'))}</td>
+        <td style="white-space:nowrap;">${b.pinVia ? '' : `<button class="send-btn ${b.linkSentAt ? 'again' : 'todo'}" onclick="resendLink('${b.no}')">📤 ${b.linkSentAt ? 'Resend link' : 'Send link'}</button>`}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="8" class="empty-row">No bookings here.</td></tr>';
+  }catch(e){ document.getElementById('trkListCount').textContent = 'Could not load: ' + e.message; }
+}
+function downloadTrackerList(){
+  if(!trkRows.length){ toast('Nothing to download'); return; }
+  const d = t => t ? new Date(t).toLocaleString('en-IN') : '';
+  const rows = [['Customer name', 'Mobile Number', 'Dealer Name', 'Link sent', 'Sent by', 'Link opened', 'Location', 'Delivery man']]
+    .concat(trkRows.map(b => [b.name, b.no, b.dealer, d(b.linkSentAt), b.linkSentName || b.linkSentBy, d(b.linkOpenedAt),
+      b.pinVia === 'link' ? 'Pinned via link' : b.pinVia ? 'Pinned other way' : 'Not pinned', b.assignedTo === 'office' ? 'Office' : b.assignedName]));
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:22},{wch:14},{wch:20},{wch:20},{wch:16},{wch:20},{wch:18},{wch:18}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Locations');
+  XLSX.writeFile(wb, 'gasdost_location_tracker_' + trkListNow.key + (trkListNow.dealer ? '_' + trkListNow.dealer.replace(/[^A-Za-z0-9]+/g, '_') : '') + '.xlsx');
+  toast('Exported ' + trkRows.length + ' rows');
+}
+
+// Takes a delivery man off the dashboard. His open bookings go to the office.
+async function removeDeliveryMan(phone, pending){
+  const m = getTeam().find(x => x.phone === phone) || {};
+  const name = m.name || ((serverStatus && serverStatus.names || {})[phone]) || ('+' + phone);
+  const msg = 'Remove ' + name + ' from Delivery status?' +
+    (pending ? ' His ' + pending + ' pending booking' + (pending === 1 ? '' : 's') + ' will go to 🏢 Office, so you can give them to someone else.' : '') +
+    ' If he logs in again, he comes back.';
+  if(!confirm(msg)) return;
+  try{
+    const d = await api('/api/team/' + phone + '/remove', {method:'POST', body:{}});
+    serverTeam = serverTeam.filter(x => x.phone !== phone);
+    toast(name + ' removed' + (d.moved ? ' — ' + d.moved + ' booking' + (d.moved === 1 ? '' : 's') + ' moved to office' : ''));
+    await refreshOnline();
+  }catch(e){ toast('Could not remove: ' + e.message); }
+}
+
+// Signs a delivery man's phone out. His bookings stay safe in the database.
+async function logoutDeliveryMan(phone){
+  const m = getTeam().find(x => x.phone === phone);
+  const name = (m && m.name) || ('+' + phone);
+  if(!confirm('Log ' + name + ' out of the delivery app? His phone goes back to the login screen within about a minute. His bookings stay safe.')) return;
+  try{
+    await api('/api/team/' + phone + '/logout', {method:'POST', body:{}});
+    serverTeam = serverTeam.filter(x => x.phone !== phone);
+    renderTeam(); fillAssignList();
+    toast(name + ' logged out');
+  }catch(e){ toast('Could not log out: ' + e.message); }
+}
+
+function renderTeam(){
+  const body = document.getElementById('statusBody');
+  if(!body) return;
+  const {rows, totals} = buildDeliveryStatus();
+
+  document.getElementById('kpi_total').textContent = totals.total;
+  document.getElementById('kpi_delivered').textContent = totals.delivered;
+  document.getElementById('kpi_pending').textContent = totals.pending;
+  const kw = document.getElementById('kpi_waiting');
+  if(kw) kw.textContent = totals.waiting != null ? totals.waiting : getBookings().filter(b => b.status === 'waiting').length;
+  document.getElementById('kpi_rate').textContent = totals.rate + '%';
+  document.getElementById('kpi_bar').style.width = totals.rate + '%';
+  document.getElementById('team_active_summary').textContent =
+    totals.activeMen + ' of ' + totals.teamSize + ' delivery men active';
+
+  const noteEl = document.getElementById('lastUploadNote');
+  const last = getLastUpload();
+  if(noteEl){
+    if(last && last.count){
+      noteEl.style.display = 'flex';
+      noteEl.innerHTML = `📤 Last office upload: <b>${last.count}</b> booking${last.count===1?'':'s'} · ${fmtAgo(last.at)}`;
+    } else {
+      noteEl.style.display = 'none';
+    }
+  }
+
+  renderDealers();
+  const qEl = document.getElementById('teamSearch');
+  const q = qEl ? qEl.value.trim().toLowerCase() : '';
+  const qd = q.replace(/\D/g, '');
+  const shown = !q ? rows : rows.filter(r =>
+    (r.name || '').toLowerCase().includes(q) || (qd && (r.phone || '').includes(qd)));
+  const cnt = document.getElementById('teamSearchCount');
+  if(cnt) cnt.textContent = q ? (shown.length ? `Showing ${shown.length} of ${rows.length}` : 'Nobody matches that') : '';
+
+  if(!shown.length){
+    body.innerHTML = '<tr><td colspan="7" class="empty-row">' +
+      (q ? 'No delivery man matches that search.' : 'No delivery men yet. Connect a phone with the setup QR code above, and he will appear here once he logs in.') +
+      '</td></tr>';
+    return;
+  }
+
+  body.innerHTML = shown.map(r=>{
+    const assigned = r.delivered + r.pending;
+    const rate = assigned ? Math.round(r.delivered / assigned * 100) : 0;
+    const statusCell = r.goneSum ? '<span class="muted">—</span>'
+      : r.gone ? '<span class="pill pill-off">👋 Logged out</span>'
+      : r.phone === null || r.office
+      ? '<span class="muted">—</span>'
+      : (r.active
+          ? '<span class="pill pill-on">🟢 Active</span>'
+          : `<span class="pill pill-off">⚪ ${r.lastActive ? fmtAgo(r.lastActive) : 'Not seen'}</span>`);
+    return `<tr class="${r.phone===null?'unassigned':''}${r.gone || r.goneSum ? ' gone' : ''}">
+      <td>${esc(r.name)}${r.phone && !r.office && !r.goneSum ? `<div style="font-size:11.5px;color:var(--muted);font-style:normal;">+${r.phone.slice(0,2)} ${r.phone.slice(2,7)} ${r.phone.slice(7)}</div>` : ''}</td>
+      <td>${statusCell}</td>
+      <td class="num" style="color:var(--green);">${numBtn(r.delivered, 'delivered', r)}</td>
+      <td class="num" style="color:var(--amber);">${numBtn(r.pending, 'pending', r)}</td>
+      <td class="num">${numBtn(assigned, 'all', r)}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="bar-mini"><div style="width:${rate}%;"></div></div>
+          <span class="muted" style="font-size:12px;">${rate}%</span>
+        </div>
+      </td>
+      <td style="text-align:right;">${r.phone && !r.office && !r.goneSum && isOnline()
+        ? (r.gone ? '' : `<button class="send-btn again" onclick="logoutDeliveryMan('${r.phone}')">Log out</button>`) +
+          `<button class="send-btn again" style="margin-left:6px;" onclick="removeDeliveryMan('${r.phone}', ${r.pending})">🗑 Remove</button>` : ''}</td>
+    </tr>`;
+  }).join('');
+}
+
+renderTeam();
+renderBatch(); // sets the empty state and hides the tab badge on first load
+setInterval(renderTeam, 15000); // re-check periodically so "active" ages out and new deliveries show up
+window.addEventListener('storage', e=>{ // live update when the delivery app writes, same origin
+  if(e.key === TEAM_KEY || e.key === STORE_KEY) renderTeam();
+});
+
+function addToBatch(){
+  const errEl = document.getElementById('addError');
+  errEl.textContent = '';
+
+  const no = document.getElementById('a_no').value.trim();
+  const name = document.getElementById('a_name').value.trim();
+  let bookingId = document.getElementById('a_booking').value.trim();
+  const addr = document.getElementById('a_addr').value.trim();
+  const dealer = document.getElementById('a_dealer').value.trim();
+
+  if(!isValidMobileNo(no)){ errEl.textContent = 'Enter a valid 10-digit mobile number.'; return; }
+  const conns = connectionsFor(no);
+  let key = aKey && mob(aKey) === no ? aKey : null;
+  if(!key && conns.length > 1){
+    const m = conns.find(c => (c.dealer || '').toLowerCase() === dealer.toLowerCase());
+    if(m) key = m.no;
+    else { errEl.textContent = 'This number is a customer of more than one dealership — tap the dealership above.'; return; }
+  }
+  key = key || (conns[0] ? conns[0].no : no);
+  if(batch.find(b=>b.n===key)){ errEl.textContent = 'This customer is already in the batch.'; return; }
+  if(!name){ errEl.textContent = 'Enter the customer\'s name.'; return; }
+  if(!bookingId) bookingId = 'BK-'+key;
+
+  batch.push({ n:key, m:name, p:'91'+no, a:addr, g:dealer, b:bookingId });
+  aKey = null;
+  renderBatch();
+
+  ['a_no','a_name','a_booking','a_addr','a_dealer'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('a_found').style.display = 'none';
+  document.getElementById('a_no').focus();
+  toast('Added '+name+' to batch');
+  hideQr();
+}
+
+const TEMPLATE_HEADERS = ['Mobile Number', 'Name', 'Booking ID (optional)', 'Dealer Name (only if the number has more than one)'];
+
+function downloadTemplate(){
+  const rows = [
+    TEMPLATE_HEADERS,
+    ['9876500001', 'Ramesh Patil', ''],
+    ['9876500002', 'Sunita Joshi', '']
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:16},{wch:22},{wch:20},{wch:30}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Bookings');
+  XLSX.writeFile(wb, 'gasdost_booking_template.xlsx');
+  toast('Template downloaded');
+}
+
+function handleTemplateUpload(evt){
+  const file = evt.target.files[0];
+  const errEl = document.getElementById('xlsxError');
+  const summaryEl = document.getElementById('xlsxSummary');
+  errEl.textContent = '';
+  summaryEl.style.display = 'none';
+  if(!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async e=>{
+    let rows;
+    try{
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(sheet, {header:1, blankrows:false});
+    }catch(err){
+      errEl.textContent = 'Could not read that file — make sure it\'s the .xlsx/.xls/.csv template.';
+      evt.target.value = '';
+      return;
+    }
+
+    // Skip the header row (row 0), read by column position so re-labelled headers still work.
+    const dataRows = rows.slice(1);
+    // Know every dealership each number belongs to before deciding.
+    if(isOnline()){
+      const nos = [...new Set(dataRows.map(r => String(r[0]==null ? '' : r[0]).replace(/\D/g,'').slice(-10)).filter(isValidMobileNo))];
+      try{
+        for(let i = 0; i < nos.length; i += 2000)
+          noteCustomers((await api('/api/lookup', {method:'POST', body:{nos: nos.slice(i, i + 2000)}})).customers);
+      }catch(err){}
+    }
+    let added = 0, invalid = 0, duplicate = 0, unclear = 0;
+    dataRows.forEach(r=>{
+      const no = String(r[0]==null ? '' : r[0]).replace(/\D/g,'').slice(-10);
+      const name = String(r[1]==null ? '' : r[1]).trim();
+      let bookingId = String(r[2]==null ? '' : r[2]).trim();
+      const dealer = String(r[3]==null ? '' : r[3]).trim();
+
+      if(!isValidMobileNo(no) || !name){ invalid++; return; }
+      const conns = connectionsFor(no);
+      let known = conns.length === 1 ? conns[0] : conns.find(c => dealer && (c.dealer || '').toLowerCase() === dealer.toLowerCase());
+      if(!known && conns.length > 1){ unclear++; return; }
+      known = known || {};
+      const key = known.no || no;
+      if(batch.find(b=>b.n===key)){ duplicate++; return; }
+      if(!bookingId) bookingId = 'BK-'+key;
+      batch.push({ n:key, m:name, p:'91'+no, a:known.address||'', g:known.dealer||dealer, b:bookingId });
+      added++;
+    });
+
+    renderBatch();
+    hideQr();
+    summaryEl.style.display = 'block';
+    summaryEl.textContent = `✅ Added ${added} booking${added===1?'':'s'} from the file` +
+      (duplicate ? `, skipped ${duplicate} already in the batch` : '') +
+      (invalid ? `, skipped ${invalid} row${invalid===1?'':'s'} with missing/invalid data` : '') +
+      (unclear ? `, skipped ${unclear} number${unclear===1?'':'s'} that belong to more than one dealership — fill the Dealer Name column for those` : '') + '.';
+    toast(`Imported ${added} booking${added===1?'':'s'} from Excel`);
+    evt.target.value = '';
+  };
+  reader.onerror = ()=>{ errEl.textContent = 'Could not read that file.'; evt.target.value=''; };
+  reader.readAsArrayBuffer(file);
+}
+
+function removeFromBatch(no){
+  batch = batch.filter(b=>b.n!==no);
+  renderBatch();
+  renderBookingSearch();
+  hideQr();
+}
+
+function clearBatch(){
+  if(batch.length && !confirm('Clear all '+batch.length+' booking(s) from the batch?')) return;
+  batch = [];
+  renderBatch();
+  hideQr();
+}
+
+function renderBatch(){
+  const table = document.getElementById('batchTable');
+  const empty = document.getElementById('batchEmpty');
+  const body = document.getElementById('batchBody');
+  const countEl = document.getElementById('batchCount');
+  const warnEl = document.getElementById('batchWarn');
+  const genBtn = document.getElementById('genBtn');
+
+  countEl.textContent = batch.length + ' booking' + (batch.length===1?'':'s');
+  genBtn.disabled = batch.length===0;
+  const uploadBtn = document.getElementById('uploadBtn');
+  if(uploadBtn) uploadBtn.disabled = batch.length===0;
+
+  // keep the badge on the Bookings tab in sync, so the count is visible from the status tab too
+  const tabCount = document.getElementById('tabBatchCount');
+  if(tabCount){
+    tabCount.textContent = batch.length;
+    tabCount.style.display = batch.length ? 'inline-block' : 'none';
+  }
+
+  if(batch.length===0){
+    table.style.display='none'; empty.style.display='block';
+  } else {
+    table.style.display='table'; empty.style.display='none';
+    body.innerHTML = batch.map(b=>`
+      <tr>
+        <td>${b.n}</td>
+        <td>${esc(b.m)}</td>
+        <td>${esc(b.a)}</td>
+        <td>${esc(b.g)}</td>
+        <td>${esc(b.b)}</td>
+        <td class="rm"><button class="rm-btn" onclick="removeFromBatch('${b.n}')" title="Remove">✕</button></td>
+      </tr>`).join('');
+  }
+
+  if(batch.length > QR_PER_CODE){
+    warnEl.style.display='block';
+    warnEl.textContent = `This batch will be split into ${Math.ceil(batch.length / QR_PER_CODE)} QR codes of up to ${QR_PER_CODE} bookings each — the delivery man scans them one after the other.`;
+  } else {
+    warnEl.style.display='none';
+  }
+}
+
+function buildPayload(){
+  return JSON.stringify({ t:'lmbg_bulk_v1', items: batch });
+}
+
+// Short QR codes scan far more reliably than long ones, so each code carries
+// only mobile + name (+ booking ID if it isn't the usual BK-<mobile>), and a
+// big batch is split into several codes. Address and dealer fill in on the
+// phone from the office list.
+//   GD2|<part>/<parts>|<mobile>~<name>~<booking>;<mobile>~<name>;…
+function qrClean(v, max){ return String(v || '').replace(/[~;|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max); }
+function buildQrParts(){
+  const items = batch.map(b => {
+    const name = (b.m && b.m !== 'New Customer') ? qrClean(b.m, 24) : '';
+    const bk = b.b && b.b !== 'BK-' + b.n ? '~' + qrClean(b.b, 20) : '';
+    return b.n + '~' + name + bk;
+  });
+  const parts = [];
+  for(let i = 0; i < items.length; i += QR_PER_CODE) parts.push(items.slice(i, i + QR_PER_CODE));
+  return parts.map((p, i) => 'GD2|' + (i + 1) + '/' + parts.length + '|' + p.join(';'));
+}
+function drawQrPart(){
+  const qrEl = document.getElementById('qrcode');
+  qrEl.innerHTML = '';
+  new QRCode(qrEl, { text: qrParts[qrPartIdx], width: 320, height: 320, correctLevel: QRCode.CorrectLevel.M });
+  const nav = document.getElementById('qrNav');
+  nav.style.display = qrParts.length > 1 ? 'flex' : 'none';
+  document.getElementById('qrPartLabel').textContent = 'Code ' + (qrPartIdx + 1) + ' of ' + qrParts.length;
+  document.getElementById('qrPrev').disabled = qrPartIdx === 0;
+  document.getElementById('qrNext').disabled = qrPartIdx === qrParts.length - 1;
+  setTimeout(()=>{
+    // The saved picture gets a white border (scanners need it) and a label.
+    const src = qrEl.querySelector('canvas');
+    if(!src){ const img = qrEl.querySelector('img'); lastQrDataUrl = img ? img.src : null; return; }
+    const pad = 40, label = qrParts.length > 1 ? 34 : 0;
+    const c = document.createElement('canvas');
+    c.width = src.width + pad * 2; c.height = src.height + pad * 2 + label;
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+    g.drawImage(src, pad, pad);
+    if(label){ g.fillStyle = '#111'; g.font = 'bold 20px sans-serif'; g.textAlign = 'center';
+      g.fillText('GasDost · Code ' + (qrPartIdx + 1) + ' of ' + qrParts.length, c.width / 2, c.height - 22); }
+    lastQrDataUrl = c.toDataURL('image/png');
+  }, 60);
+}
+function qrStep(d){ qrPartIdx = Math.max(0, Math.min(qrParts.length - 1, qrPartIdx + d)); drawQrPart(); }
+function generateQr(){
+  if(batch.length===0) return;
+  qrParts = buildQrParts(); qrPartIdx = 0;
+  drawQrPart();
+  document.getElementById('payloadPreview').textContent = '';
+  document.getElementById('qrWrap').style.display = 'flex';
+  toast('QR code generated for '+batch.length+' booking'+(batch.length===1?'':'s'));
+  return;
+
+  setTimeout(()=>{
+    const img = qrEl.querySelector('img');
+    const canvas = qrEl.querySelector('canvas');
+    lastQrDataUrl = img ? img.src : (canvas ? canvas.toDataURL('image/png') : null);
+  }, 60);
+}
+
+function hideQr(){
+  document.getElementById('qrWrap').style.display = 'none';
+  lastQrDataUrl = null;
+}
+
+/* ---------------- Customers (master list kept in the admin console) ----------------
+   One row per customer: name, mobile, first address, dealer name, unique code.
+   Kept by mobile number, so re-uploading an updated sheet refreshes the people
+   already here instead of duplicating them. */
+const CUST_HEADERS = ['Name', 'Mobile Number', 'First Address', 'Dealer Name']; // template — unique code is made by the app
+const CUST_EXPORT_HEADERS = CUST_HEADERS.concat(['Unique Code']);
+
+// Next free code: C0001, C0002 … carrying on from the highest one already used,
+// so codes are never reused even after customers are removed.
+const CUST_SEQ_KEY = 'lmbg_customer_code_seq_v1';
+function nextCustomerCode(list){
+  let max = 0;
+  try{ max = parseInt(localStorage.getItem(CUST_SEQ_KEY), 10) || 0; }catch(e){}
+  list.forEach(c => { const m = /^C(\d+)$/i.exec(c.code || ''); if(m) max = Math.max(max, parseInt(m[1], 10)); });
+  max++;
+  try{ localStorage.setItem(CUST_SEQ_KEY, String(max)); }catch(e){}
+  return 'C' + String(max).padStart(4, '0');
+}
+const CUST_SHOW_MAX = 300; // keep the page quick with thousands of customers
+
+function getCustomers(){
+  try{ const p = JSON.parse(localStorage.getItem(CUST_KEY)); if(Array.isArray(p)) return p; }catch(e){}
+  return [];
+}
+function saveCustomers(list){
+  try{ localStorage.setItem(CUST_KEY, JSON.stringify(list)); return true; }
+  catch(e){ return false; } // browser storage full
+}
+
+function downloadCustomerTemplate(){
+  const rows = [
+    CUST_HEADERS,
+    ['Ramesh Patil', '9876500001', 'Flat 12, Shanti Niwas, Naupada, Thane', 'GasDost'],
+    ['Sunita Joshi', '9876500002', 'B-4, Sai Krupa CHS, Kopri, Thane', 'GasDost']
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:22},{wch:16},{wch:45},{wch:22}];
+  // Keep mobile numbers and codes as text so Excel doesn't turn them into numbers.
+  for(let r = 1; r < rows.length; r++){
+    ['B'].forEach(c => { const cell = ws[c + (r + 1)]; if(cell){ cell.t = 's'; cell.z = '@'; } });
+  }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Customers');
+  XLSX.writeFile(wb, 'gasdost_customer_template.xlsx');
+  toast('Customer template downloaded');
+}
+
+// Finds each column by its heading, so the columns can be in any order. Falls
+// back to the template's order if the headings were changed.
+function customerColumns(header){
+  const norm = h => String(h == null ? '' : h).toLowerCase().replace(/[^a-z]/g, '');
+  const h = header.map(norm);
+  const find = (words, fallback) => {
+    const i = h.findIndex(x => words.some(w => x.includes(w)));
+    return i >= 0 ? i : fallback;
+  };
+  return {
+    name:    (() => { const i = h.findIndex(x => x.includes('name') && !x.includes('dealer')); return i >= 0 ? i : 0; })(),
+    mobile:  find(['mobile', 'phone', 'contact'], 1),
+    address: find(['address', 'addr'], 2),
+    dealer:  find(['dealer', 'distributor'], 3),
+    missingId: h.findIndex(x => x.includes('missingid'))   // only in the downloaded missing list
+  };
+}
+
+function handleCustomerUpload(evt){
+  const file = evt.target.files[0];
+  const errEl = document.getElementById('custError');
+  const summaryEl = document.getElementById('custSummary');
+  errEl.textContent = '';
+  summaryEl.style.display = 'none';
+  if(!file) return;
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    let rows;
+    try{
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, blankrows:false, raw:false});
+    }catch(err){
+      errEl.textContent = 'Could not read that file — make sure it is the .xlsx/.xls/.csv customer template.';
+      evt.target.value = '';
+      return;
+    }
+    if(!rows.length){ errEl.textContent = 'That file is empty.'; evt.target.value = ''; return; }
+
+    const col = customerColumns(rows[0]);
+    const cell = (r, i) => String(r[i] == null ? '' : r[i]).replace(/\s+/g, ' ').trim();
+    const seen = {};
+    const good = [];
+    let invalid = 0;
+    const badRows = [];
+    const missing = [];
+    rows.slice(1).forEach((r, idx) => {
+      const rawNo = cell(r, col.mobile);
+      let no = rawNo.replace(/\D/g, '');
+      if(no.length === 12 && no.startsWith('91')) no = no.slice(2); // +91 written in
+      if(no.length === 11 && no.startsWith('0')) no = no.slice(1);
+      const name = cell(r, col.name);
+      const mid = col.missingId >= 0 ? cell(r, col.missingId).replace(/\D/g, '') : '';
+      // A name but no usable mobile: kept aside so the number can be filled in later.
+      if(name && !isValidMobileNo(no)){ missing.push({name, address: cell(r, col.address), dealer: cell(r, col.dealer), badMobile: rawNo, id: mid}); return; }
+      if(!isValidMobileNo(no) || !name){ invalid++; if(badRows.length < 5) badRows.push(idx + 2); return; }
+      const rec = { name, no, address: cell(r, col.address), dealer: cell(r, col.dealer), missingId: mid };
+      // Same number + same dealership twice in the file: last row wins.
+      // Same number with another dealership is another customer.
+      const sk = no + '|' + rec.dealer.toLowerCase();
+      if(seen[sk] !== undefined) good[seen[sk]] = rec;
+      else { seen[sk] = good.length; good.push(rec); }
+    });
+    evt.target.value = '';
+
+    pendingMissing = missing;
+    if(!good.length && !missing.length){
+      errEl.textContent = 'No customers could be read from that file' + (invalid ? ` — ${invalid} row${invalid===1?'':'s'} had a missing name or wrong mobile number (row ${badRows.join(', ')}).` : '.');
+      return;
+    }
+    const saved = {};
+    getCustomers().forEach(c => saved[c.no] = true);
+    const newCount = good.filter(c => !saved[c.no]).length;
+    pendingCustomers = good;
+    document.getElementById('custPendingText').innerHTML =
+      `📄 <b>${good.length}</b> customer${good.length===1?'':'s'} read from <b>${esc(file.name)}</b> — ` +
+      `${newCount} new, ${good.length - newCount} already saved (will be updated).` +
+      (missing.length ? `<br>📵 <b>${missing.length.toLocaleString()}</b> row${missing.length===1?' has':'s have'} a name but no mobile number — ${isOnline() ? 'they go to the <b>Missing mobile number</b> list below, so you can fill the number in later.' : 'connect to the online database to keep them aside.'}` : '') +
+      (invalid ? `<br>Skipped ${invalid} row${invalid===1?'':'s'} with no name (row ${badRows.join(', ')}${invalid > badRows.length ? '…' : ''}).` : '') +
+      `<br><b>Not saved yet</b> — press Save customers to keep them.`;
+    document.getElementById('custPending').style.display = 'block';
+  };
+  reader.onerror = () => { errEl.textContent = 'Could not read that file.'; evt.target.value = ''; };
+  reader.readAsArrayBuffer(file);
+}
+
+let pendingCustomers = null; // read from a file, waiting for the Save button
+let pendingMissing = [];     // rows with a name but no mobile, from the same file
+
+/* ---------------- Online database ----------------
+   When the console is opened from the Netlify site and the office password has
+   been entered once, customers are saved online and customer locations come
+   straight in. Without it everything still works the old way, in this browser. */
+
+function adminKey(){ try{ return localStorage.getItem(ADMIN_KEY_STORE) || ''; }catch(e){ return ''; } }
+function canGoOnline(){ return /^https?:$/.test(location.protocol); }
+function isOnline(){ return onlineState === 'on'; }
+
+async function api(path, opts){
+  opts = opts || {};
+  const r = await fetch(path, {
+    method: opts.method || 'GET',
+    headers: Object.assign({'x-gasdost-key': opts.key || adminKey()}, opts.body ? {'content-type':'application/json'} : {}),
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+    cache: 'no-store'
+  });
+  let d = {};
+  try{ d = await r.json(); }catch(e){}
+  if(!r.ok){ const err = new Error(d.error || ('Server said ' + r.status)); err.status = r.status; throw err; }
+  return d;
+}
+
+function setNet(state, text){
+  onlineState = state;
+  const b = document.getElementById('netBtn');
+  if(!b) return;
+  b.textContent = text;
+  b.title = state === 'on' ? 'Saving to the online database' : 'Click to connect to the online database';
+}
+
+// Remember customers the database sent us (details, link code, location).
+function noteCustomers(list){
+  (list || []).forEach(c => {
+    custCache.set(c.no, c);
+    if(c.token) tokenMap[c.no] = c.token;
+    if(c.location) locMap[c.no] = Object.assign({no: c.no}, c.location);
+  });
+}
+
+// Sends customers to the database 2,000 at a time, so 80,000 is fine.
+async function uploadCustomersInParts(list, onProgress){
+  const tot = {added:0, updated:0, invalid:0};
+  for(let i = 0; i < list.length; i += 2000){
+    const d = await api('/api/customers', {method:'POST', body:{customers: list.slice(i, i + 2000)}});
+    tot.added += d.added; tot.updated += d.updated; tot.invalid += d.invalid;
+    if(onProgress) onProgress(Math.min(i + 2000, list.length), list.length);
+  }
+  return tot;
+}
+
+async function connectOnline(ask){
+  if(!canGoOnline()){
+    if(ask !== false) alert('The online database only works when this console is opened from your Netlify site, not from a file on this computer.');
+    setNet('off', '⚪ Offline (opened from a file)');
+    return;
+  }
+  if(isOnline() && ask !== false){ refreshOnline(true); return; }
+  let key = adminKey();
+  if(!key || ask === true){
+    if(ask === false) { setNet('off', '⚪ Offline — click to connect'); return; }
+    key = prompt('Office password for the online database:', '') || '';
+    if(!key) return;
+  }
+  try{
+    const who = await api('/api/whoami', {key});
+    if(who.role !== 'admin') throw Object.assign(new Error('That is a phone key, not the office password'), {status:401});
+    try{ localStorage.setItem(ADMIN_KEY_STORE, key); }catch(e){}
+    setNet('on', '🟢 Online');
+    await firstSync();
+    await refreshOnline();
+    if(ask !== false) toast('Connected to the online database');
+  }catch(e){
+    if(e.status === 401){
+      try{ localStorage.removeItem(ADMIN_KEY_STORE); }catch(x){}
+      setNet('bad', '🔴 Wrong password — click to retry');
+      if(ask !== false) alert('That password was not accepted.');
+    } else {
+      setNet('off', '⚪ Offline — click to retry');
+    }
+  }
+}
+
+// The first time online, move anything saved only in this browser up to the
+// database (keeping each customer's code), then make the database the master.
+async function firstSync(){
+  // Once only: copy what the earlier version saved into the new database.
+  try{
+    const r = await api('/api/import-old', {method:'POST', body:{}});
+    if(r.customers) toast('Moved ' + r.customers + ' saved customers into the new database');
+  }catch(e){}
+  // Customers saved only in this browser (before the database existed) go up once.
+  const local = getCustomers();
+  if(local.length && !localStorage.getItem('lmbg_local_custs_uploaded_v1')){
+    const missing = [];
+    for(let i = 0; i < local.length; i += 2000){
+      const part = local.slice(i, i + 2000);
+      const d = await api('/api/lookup', {method:'POST', body:{nos: part.map(c => c.no)}});
+      const have = new Set(d.customers.map(c => c.no));
+      part.forEach(c => { if(!have.has(c.no)) missing.push(c); });
+    }
+    if(missing.length){
+      await uploadCustomersInParts(missing);
+      toast('Moved ' + missing.length + ' customer' + (missing.length===1?'':'s') + ' from this browser to the online database');
+    }
+    try{ localStorage.setItem('lmbg_local_custs_uploaded_v1', '1'); }catch(e){}
+  }
+  renderCustomers(); renderBookingSearch(); loadRecipients();
+}
+
+async function refreshOnline(full){
+  if(!isOnline()) return;
+  try{
+    if(full) await firstSync();
+    serverStatus = await api('/api/status');
+    serverTeam = serverStatus.team || [];
+    renderTeam();
+    fillAssignList();
+    loadTracker();
+    // New locations for the people on the send list.
+    const nos = recipients.map(r => r.no).slice(0, 2000);
+    if(nos.length){
+      const before = nos.filter(n => locMap[n]).length;
+      const d = await api('/api/lookup', {method:'POST', body:{nos}});
+      noteCustomers(d.customers);
+      const now = nos.filter(n => locMap[n]).length;
+      if(now > before) toast((now - before) + ' new customer location' + (now-before===1?'':'s') + ' received');
+      renderSendList();
+    }
+    if(document.getElementById('tab-customers').classList.contains('active')){ renderCustomers(); loadMissing(); }
+  }catch(e){
+    if(e.status === 401){ setNet('bad', '🔴 Wrong password — click to retry'); }
+    else setNet('on', '🟡 Online (connection hiccup)');
+  }
+}
+
+// Bookings in this browser get the pin too, so "waiting for a location"
+// lists drop the customers who have already answered.
+function applyLocationsToBookings(locs){
+  const list = getBookings();
+  let changed = false;
+  locs.forEach(l => {
+    const b = list.find(x => x.no === l.no);
+    if(b && b.status !== 'delivered' && (!b.updated || b.updated < l.at)){
+      b.lat = l.lat; b.lng = l.lng; b.status = 'shared'; b.updated = l.at; changed = true;
+    }
+  });
+  if(changed){ saveBookings(list); renderTeam(); }
+}
+
+// Get secret link codes for everyone in the send list who doesn't have one.
+let tokenInFlight = null;
+function ensureTokens(list){
+  if(!isOnline()) return;
+  const need = list.filter(r => !tokenMap[r.no]).map(r => ({no:r.no, name:r.name, address:r.address, dealer:r.dealer}));
+  if(!need.length || tokenInFlight) return;
+  tokenInFlight = (async () => {
+    for(let i = 0; i < need.length; i += 1000){
+      const d = await api('/api/links', {method:'POST', body:{items: need.slice(i, i + 1000)}});
+      Object.assign(tokenMap, d.tokens);
+      noteCustomers(d.customers);
+    }
+    enrichRecipients();
+    renderSendList();
+  })().catch(() => {}).finally(() => { tokenInFlight = null; });
+}
+
+function locationCell(no){
+  const l = locMap[no];
+  if(!l) return '<span class="sent-no">—</span>';
+  const when = new Date(l.at).toLocaleString([], {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+  return `<a href="https://maps.google.com/?q=${l.lat},${l.lng}" target="_blank" rel="noopener" class="sent-yes" style="text-decoration:none;">📍 ${esc(when)}</a>`;
+}
+
+async function showPhoneSetup(){
+  if(!isOnline()){ await connectOnline(); if(!isOnline()) return; }
+  try{
+    const d = await api('/api/staff-key');
+    const base = location.origin + location.pathname.replace(/[^/]*$/, '');
+    const box = document.getElementById('phoneQr');
+    box.innerHTML = '';
+    new QRCode(box, {text: base + 'lm_delivery_app.html#staff=' + encodeURIComponent(d.key), width:240, height:240, correctLevel: QRCode.CorrectLevel.M});
+    document.getElementById('phoneQrWrap').style.display = 'flex';
+    newPairCode();
+  }catch(e){ toast('Could not get the phone key: ' + e.message); }
+}
+// The 6-digit code, with a countdown; a fresh one when it runs out.
+let pairTimer = null;
+async function newPairCode(){
+  clearInterval(pairTimer);
+  try{
+    const d = await api('/api/pair-code', {method:'POST', body:{}});
+    document.getElementById('pairCode').textContent = d.code.slice(0,3) + ' ' + d.code.slice(3);
+    const tick = () => {
+      const left = Math.max(0, Math.round((d.expiresAt - Date.now()) / 1000));
+      const wrap = document.getElementById('phoneQrWrap');
+      if(!wrap || wrap.style.display === 'none'){ clearInterval(pairTimer); return; }
+      if(!left){ clearInterval(pairTimer); newPairCode(); return; }
+      document.getElementById('pairLeft').textContent = 'Works for ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') + ' more';
+    };
+    tick(); pairTimer = setInterval(tick, 1000);
+  }catch(e){ document.getElementById('pairCode').textContent = '— — —'; }
+}
+
+async function savePendingCustomers(){
+  if(!pendingCustomers) return;
+  if(isOnline()){
+    try{
+      const txt = document.getElementById('custPendingText');
+      const d = pendingCustomers.length ? await uploadCustomersInParts(pendingCustomers, (done, all) => {
+        txt.innerHTML = `⏳ Saving… <b>${done.toLocaleString()}</b> of ${all.toLocaleString()}. Please keep this page open.`;
+      }) : {added:0, updated:0, invalid:0};
+      let kept = 0, corrected = 0;
+      for(let i = 0; i < pendingMissing.length; i += 2000){
+        const m = await api('/api/missing', {method:'POST', body:{rows: pendingMissing.slice(i, i + 2000)}});
+        kept += m.added || 0; corrected += m.corrected || 0;
+      }
+      const missingCount = pendingMissing.length;
+      pendingCustomers = null; pendingMissing = [];
+      document.getElementById('custPending').style.display = 'none';
+      custOffset = 0;
+      const t = await api('/api/customers?limit=1');
+      custTotalAll = t.total;
+      const sum = document.getElementById('custSummary');
+      sum.style.display = 'block';
+      sum.textContent = `✅ Saved online: ${d.added.toLocaleString()} new customer${d.added===1?'':'s'}` + (d.updated ? `, updated ${d.updated.toLocaleString()}` : '') + `. Total now ${custTotalAll.toLocaleString()}.` +
+        (missingCount ? ` 📵 ${missingCount.toLocaleString()} without a mobile number kept aside` +
+          (corrected ? ` (${corrected.toLocaleString()} corrected in place)` : (kept < missingCount ? ` (${(missingCount - kept).toLocaleString()} were already there)` : '')) + '.' : '');
+      renderCustomers(); renderBookingSearch(); loadRecipients(); loadMissing();
+      toast('Customers saved to the online database');
+    }catch(e){
+      document.getElementById('custError').textContent = 'Could not save online: ' + e.message + ' — nothing was saved, try again.';
+    }
+    return;
+  }
+  const list = getCustomers();
+  const byNo = {};
+  list.forEach((c, i) => byNo[c.no] = i);
+  let added = 0, updated = 0;
+  pendingCustomers.forEach(c => {
+    const rec = Object.assign({}, c, {updated: Date.now()});
+    if(byNo[c.no] !== undefined){
+      rec.code = list[byNo[c.no]].code || nextCustomerCode(list); // a customer keeps his code for good
+      list[byNo[c.no]] = rec; updated++;
+    } else {
+      rec.code = nextCustomerCode(list);
+      byNo[c.no] = list.length; list.push(rec); added++;
+    }
+  });
+  if(!saveCustomers(list)){
+    document.getElementById('custError').textContent = 'The browser ran out of space to save this many customers. Try a smaller file, or delete old customers first.';
+    return;
+  }
+  pendingCustomers = null;
+  document.getElementById('custPending').style.display = 'none';
+  const sum = document.getElementById('custSummary');
+  sum.style.display = 'block';
+  sum.textContent = `✅ Saved ${added} new customer${added===1?'':'s'}` + (updated ? `, updated ${updated}` : '') + `. Total now ${list.length}.`;
+  renderCustomers();
+  renderBookingSearch();
+  loadRecipients();
+  toast('Customers saved');
+}
+function cancelPendingCustomers(){
+  pendingCustomers = null; pendingMissing = [];
+  document.getElementById('custPending').style.display = 'none';
+  toast('Nothing saved');
+}
+
+/* ---- Safer deleting: Edit switch, Delete PIN, Recycle bin, history ---- */
+function toggleCustEdit(){ document.body.classList.toggle('cust-edit'); }
+// Which office computer did it (asked once, kept on this computer).
+function pcName(){
+  let n = '';
+  try{ n = localStorage.getItem('gd_pc_name') || ''; }catch(e){}
+  if(!n){
+    n = (prompt('Name this computer for the delete history (e.g. Front desk, Pankaj PC):', '') || '').trim().slice(0, 40) || 'Office PC';
+    try{ localStorage.setItem('gd_pc_name', n); }catch(e){}
+  }
+  return n;
+}
+let pinResolve = null, pinOpts = null;
+function askPin(opts){
+  pinOpts = opts;
+  document.getElementById('pinTitle').textContent = opts.title;
+  document.getElementById('pinText').textContent = opts.text || '';
+  document.getElementById('pinWordWrap').style.display = opts.word ? 'block' : 'none';
+  document.getElementById('pinWord').value = '';
+  document.getElementById('pinInput').value = '';
+  document.getElementById('pinErr').textContent = '';
+  document.getElementById('pinOk').textContent = opts.button || 'Delete';
+  document.getElementById('pinModal').style.display = 'flex';
+  setTimeout(() => document.getElementById(opts.word ? 'pinWord' : 'pinInput').focus(), 50);
+  return new Promise(res => { pinResolve = res; });
+}
+function closePin(v){
+  document.getElementById('pinModal').style.display = 'none';
+  if(pinResolve){ const r = pinResolve; pinResolve = null; r(v); }
+}
+async function submitPin(){
+  const err = document.getElementById('pinErr');
+  err.textContent = '';
+  if(pinOpts.word && document.getElementById('pinWord').value.trim().toUpperCase() !== 'DELETE'){ err.textContent = 'Type DELETE to confirm.'; return; }
+  const pin = document.getElementById('pinInput').value.trim();
+  if(!/^\d{4,8}$/.test(pin)){ err.textContent = 'Enter the Delete PIN.'; return; }
+  const btn = document.getElementById('pinOk'); btn.disabled = true;
+  try{ const r = await pinOpts.action(pin); closePin(r || true); }
+  catch(e){ err.textContent = e.message; document.getElementById('pinInput').value = ''; document.getElementById('pinInput').focus(); }
+  finally{ btn.disabled = false; }
+}
+document.addEventListener('keydown', e => {
+  if(document.getElementById('pinModal').style.display !== 'flex') return;
+  if(e.key === 'Enter') submitPin(); else if(e.key === 'Escape') closePin(null);
+});
+let binOffset = 0;
+async function loadBin(){
+  if(!isOnline()) return;
+  try{
+    const q = (document.getElementById('binSearch').value || '').trim();
+    const d = await api('/api/customers/bin?offset=' + binOffset + '&limit=100&q=' + encodeURIComponent(q));
+    document.getElementById('binCount').textContent = d.all ? d.all.toLocaleString('en-IN') + ' in the bin' : 'Empty';
+    const to = binOffset + d.rows.length;
+    document.getElementById('binShowing').innerHTML = d.total
+      ? `Showing ${(binOffset + 1).toLocaleString()}–${to.toLocaleString()} of ${d.total.toLocaleString()}` +
+        (binOffset ? ` <button class="btn btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="binOffset=Math.max(0,binOffset-100);loadBin()">◀ Previous</button>` : '') +
+        (to < d.total ? ` <button class="btn btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="binOffset+=100;loadBin()">Next ▶</button>` : '')
+      : (d.all ? 'Nobody matches that search.' : 'Nothing deleted.');
+    document.getElementById('binBody').innerHTML = d.rows.map(r => {
+      const left = Math.max(0, 30 - Math.floor((Date.now() - r.deletedAt) / 86400000));
+      return `<tr>
+        <td>${esc(r.name || '—')}</td>
+        <td style="white-space:nowrap;">${fmtNo(r.no)}</td>
+        <td>${esc(r.dealer || '—')}</td>
+        <td>${esc(r.code || '')}</td>
+        <td style="white-space:nowrap;">${esc(new Date(r.deletedAt).toLocaleString('en-IN', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'}))}
+          <div class="muted" style="font-size:11.5px;">${esc(r.deletedBy || '')} · ${left} day${left === 1 ? '' : 's'} left</div></td>
+        <td style="text-align:right;"><button class="send-btn todo" onclick="restoreOne('${r.no}')">♻️ Restore</button></td>
+      </tr>`;
+    }).join('');
+  }catch(e){}
+}
+async function restoreOne(no){
+  try{ await api('/api/customers/restore', {method:'POST', body:{nos:[no], by: pcName()}}); toast('Restored'); loadBin(); custOffset = 0; renderCustomers(); }
+  catch(e){ toast('Could not restore: ' + e.message); }
+}
+async function restoreAll(){
+  if(!confirm('Bring back everyone in the Recycle bin?')) return;
+  try{ const d = await api('/api/customers/restore', {method:'POST', body:{all:true, by: pcName()}}); toast(d.restored.toLocaleString() + ' customers restored'); loadBin(); custOffset = 0; renderCustomers(); }
+  catch(e){ toast('Could not restore: ' + e.message); }
+}
+async function toggleDeleteLog(){
+  const w = document.getElementById('delLogWrap');
+  if(w.style.display === 'block'){ w.style.display = 'none'; return; }
+  w.style.display = 'block';
+  try{
+    const d = await api('/api/customers/log');
+    const what = {'delete':'🗑 Deleted', 'delete-all':'🗑 Deleted ALL', 'restore':'♻️ Restored', 'restore-all':'♻️ Restored all', 'purge':'⌛ Removed for good (30 days)', 'pin-changed':'🔑 PIN changed'};
+    document.getElementById('delLogBody').innerHTML = d.log.length ? d.log.map(l => `<tr>
+      <td style="white-space:nowrap;">${esc(new Date(l.at).toLocaleString('en-IN', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'}))}</td>
+      <td>${esc(what[l.action] || l.action)}</td><td class="num">${l.count || ''}</td><td>${esc(l.by || '')}</td><td>${esc(l.detail || '')}</td></tr>`).join('')
+      : '<tr><td colspan="5" class="empty-row">Nothing yet.</td></tr>';
+  }catch(e){}
+}
+async function changeDeletePin(){
+  const oldPin = prompt('Current Delete PIN:', '');
+  if(!oldPin) return;
+  const newPin = prompt('New Delete PIN (4 to 8 digits):', '');
+  if(!newPin) return;
+  if(newPin !== prompt('Type the new PIN again:', '')){ toast('The two new PINs are not the same'); return; }
+  try{
+    const d = await api('/api/customers/pin', {method:'POST', body:{oldPin, newPin, by: pcName()}});
+    toast(d.ok ? '🔑 Delete PIN changed' : (d.locked ? 'Locked for ' + d.locked + ' min — too many wrong PINs' : d.error || 'Wrong current PIN'));
+  }catch(e){ toast('Could not change: ' + e.message); }
+}
+
+// Look up one saved customer by 10-digit mobile.
+function findCustomer(no){
+  if(!no) return null;
+  return custCache.get(no) || getCustomers().find(c => c.no === no) || null;
+}
+
+/* ---- Bookings tab: pick from saved customers ---- */
+let bkTimer = null;
+function renderBookingSearch(){
+  const box = document.getElementById('bkResults');
+  if(!box) return;
+  if(isOnline()){
+    clearTimeout(bkTimer);
+    bkTimer = setTimeout(async () => {
+      const qv = document.getElementById('bkSearch').value.trim();
+      if(!qv){ box.innerHTML = ''; return; }
+      try{
+        const d = await api('/api/customers?q=' + encodeURIComponent(qv) + '&limit=8');
+        noteCustomers(d.customers);
+        drawBookingHits(box, d.customers, d.total);
+      }catch(e){}
+    }, 250);
+    return;
+  }
+  const q = document.getElementById('bkSearch').value.trim().toLowerCase();
+  const all = getCustomers();
+  if(!q){
+    box.innerHTML = all.length ? '' : '<div class="hint">No saved customers yet — add them in the <b>Customers</b> tab.</div>';
+    return;
+  }
+  const digits = q.replace(/\D/g, '');
+  const hits = all.filter(c =>
+    c.name.toLowerCase().includes(q) || (digits && c.no.includes(digits)) ||
+    (c.address || '').toLowerCase().includes(q) || (c.dealer || '').toLowerCase().includes(q) ||
+    (c.code || '').toLowerCase().includes(q)
+  );
+  drawBookingHits(box, hits.slice(0, 8), hits.length);
+}
+
+function drawBookingHits(box, hits, total){
+  if(!hits.length){ box.innerHTML = '<div class="hint">No saved customer matches that.</div>'; return; }
+  box.innerHTML = '<table><tbody>' + hits.map(c => {
+    const inBatch = batch.some(b => b.n === c.no);
+    return `<tr>
+      <td><b>${esc(c.name)}</b><div class="hint" style="margin:2px 0 0;">${esc(c.address || '')}${c.dealer ? ' · ' + esc(c.dealer) : ''}</div></td>
+      <td style="white-space:nowrap;">${fmtNo(c.no)}</td>
+      <td style="text-align:right;">${inBatch ? '<span class="sent-yes">✓ In batch</span>'
+        : `<button class="send-btn todo" onclick="addCustomerToBatch('${c.no}')">➕ Add</button>`}</td>
+    </tr>`;
+  }).join('') + '</tbody></table>' +
+  (total > hits.length ? `<div class="hint">${(total - hits.length).toLocaleString()} more — type more to narrow it down.</div>` : '');
+}
+
+function addCustomerToBatch(no){
+  const c = findCustomer(no);
+  if(!c || batch.some(b => b.n === no)) return;
+  batch.push({ n:c.no, m:c.name, p:'91'+mob(c.no), a:c.address || '', g:c.dealer || '', b:'BK-'+c.no });
+  renderBatch();
+  hideQr();
+  renderBookingSearch();
+  toast('Added ' + c.name + ' to batch');
+}
+
+// Typing a saved customer's number fills in the rest of the form.
+async function fillFromCustomer(){
+  const no = document.getElementById('a_no').value.replace(/\D/g, '');
+  const found = document.getElementById('a_found');
+  if(no.length === 10 && !findCustomer(no) && isOnline()){
+    try{ noteCustomers((await api('/api/lookup', {method:'POST', body:{nos:[no]}})).customers); }catch(e){}
+    if(document.getElementById('a_no').value.replace(/\D/g, '') !== no) return; // typed on meanwhile
+  }
+  aKey = null;
+  const list = no.length === 10 ? connectionsFor(no) : [];
+  if(!list.length){ found.style.display = 'none'; return; }
+  found.style.display = 'block';
+  if(list.length === 1){ pickConnection(list[0].no); return; }
+  found.innerHTML = '🏪 This number is a customer of <b>' + list.length + ' dealerships</b> — choose one: ' +
+    list.map(c => `<button class="send-btn todo" style="margin:4px 4px 0 0;" onclick="pickConnection('${c.no}')">${esc(c.dealer || 'No dealership')} · ${esc(c.name)}</button>`).join('');
+}
+let aKey = null; // which customer (dealership) the manual booking is for
+function pickConnection(key){
+  const c = findCustomer(key);
+  if(!c) return;
+  aKey = key;
+  document.getElementById('a_name').value = c.name;
+  document.getElementById('a_addr').value = c.address || '';
+  document.getElementById('a_dealer').value = c.dealer || '';
+  const found = document.getElementById('a_found');
+  found.style.display = 'block';
+  found.textContent = '✅ Saved customer found — details filled in' + (key.length > 10 ? ' (' + (c.dealer || '') + ')' : '') + '.';
+}
+
+let custTimer = null, custReq = 0;
+function renderCustomersOnline(){
+  clearTimeout(custTimer);
+  custTimer = setTimeout(async () => {
+    const body = document.getElementById('custBody');
+    const qv = document.getElementById('custSearch').value.trim();
+    const my = ++custReq;
+    try{
+      // The full list isn't shown — only what you search for.
+      const d = await api('/api/customers?q=' + encodeURIComponent(qv) + '&offset=' + custOffset + '&limit=' + (qv ? 100 : 1));
+      if(my !== custReq) return; // a newer search is already on its way
+      if(!qv){
+        custTotalAll = d.total;
+        const tab0 = document.getElementById('tabCustCount');
+        if(tab0){ tab0.textContent = custTotalAll.toLocaleString(); tab0.style.display = custTotalAll ? 'inline-block' : 'none'; }
+        document.getElementById('custCount').textContent = custTotalAll.toLocaleString() + ' saved customer' + (custTotalAll===1?'':'s');
+        document.getElementById('custShowing').innerHTML = '';
+        body.innerHTML = `<tr><td colspan="7" class="empty-row">${custTotalAll ? '🔎 Type a name, mobile number, address, dealer or code above to find a customer.' : 'No customers saved yet. Download the template above, fill it in and upload it.'}</td></tr>`;
+        return;
+      }
+      noteCustomers(d.customers);
+      if(!qv) custTotalAll = d.total;
+      const tab = document.getElementById('tabCustCount');
+      if(tab){ tab.textContent = custTotalAll.toLocaleString(); tab.style.display = custTotalAll ? 'inline-block' : 'none'; }
+      document.getElementById('custCount').textContent = custTotalAll.toLocaleString() + ' saved customer' + (custTotalAll===1?'':'s');
+      const from = d.total ? custOffset + 1 : 0, to = custOffset + d.customers.length;
+      document.getElementById('custShowing').innerHTML = d.total
+        ? `Showing ${from.toLocaleString()}–${to.toLocaleString()} of ${d.total.toLocaleString()}` +
+          ` <button class="btn btn-ghost" style="padding:4px 10px;font-size:12px;" ${custOffset ? '' : 'disabled'} onclick="custOffset=Math.max(0,custOffset-100);renderCustomers()">◀ Previous</button>` +
+          ` <button class="btn btn-ghost" style="padding:4px 10px;font-size:12px;" ${to < d.total ? '' : 'disabled'} onclick="custOffset+=100;renderCustomers()">Next ▶</button>`
+        : '';
+      if(!d.customers.length){
+        body.innerHTML = `<tr><td colspan="7" class="empty-row">${custTotalAll ? 'Nobody matches that search.' : 'No customers saved yet. Download the template above, fill it in and upload it.'}</td></tr>`;
+        return;
+      }
+      body.innerHTML = d.customers.map(c => `<tr>
+        <td>${esc(c.name)}</td>
+        <td style="white-space:nowrap;">${fmtNo(c.no)}</td>
+        <td>${esc(c.address)}</td>
+        <td>${esc(c.dealer)}</td>
+        <td>${esc(c.code)}</td>
+        <td style="white-space:nowrap;">${locationCell(c.no)}</td>
+        <td class="rm"><button class="rm-btn edit-only" onclick="removeCustomer('${c.no}')" title="Delete">✕</button></td>
+      </tr>`).join('');
+    }catch(e){ toast('Could not load customers: ' + e.message); }
+  }, 250);
+}
+
+function renderCustomers(){
+  if(isOnline()) return renderCustomersOnline();
+  const body = document.getElementById('custBody');
+  if(!body) return;
+  const all = getCustomers();
+  const tab = document.getElementById('tabCustCount');
+  if(tab){ tab.textContent = all.length; tab.style.display = all.length ? 'inline-block' : 'none'; }
+  document.getElementById('custCount').textContent = all.length + ' saved customer' + (all.length===1?'':'s');
+
+  const q = document.getElementById('custSearch').value.trim().toLowerCase();
+  const digits = q.replace(/\D/g, '');
+  const shown = !q ? all : all.filter(c =>
+    c.name.toLowerCase().includes(q) ||
+    (digits && c.no.includes(digits)) ||
+    (c.address || '').toLowerCase().includes(q) ||
+    (c.dealer || '').toLowerCase().includes(q) ||
+    (c.code || '').toLowerCase().includes(q)
+  );
+  const page = shown.slice(0, CUST_SHOW_MAX);
+  document.getElementById('custShowing').textContent =
+    shown.length > page.length ? `Showing the first ${page.length} of ${shown.length} — search to find someone specific.`
+    : (q ? `${shown.length} match${shown.length===1?'':'es'}` : '');
+
+  if(!page.length){
+    body.innerHTML = `<tr><td colspan="7" class="empty-row">${all.length ? 'Nobody matches that search.' : 'No customers saved yet. Download the template above, fill it in and upload it.'}</td></tr>`;
+    return;
+  }
+  body.innerHTML = page.map(c => `<tr>
+    <td>${esc(c.name)}</td>
+    <td style="white-space:nowrap;">${fmtNo(c.no)}</td>
+    <td>${esc(c.address)}</td>
+    <td>${esc(c.dealer)}</td>
+    <td>${esc(c.code)}</td>
+    <td style="white-space:nowrap;">${locationCell(c.no)}</td>
+    <td class="rm"><button class="rm-btn edit-only" onclick="removeCustomer('${c.no}')" title="Delete">✕</button></td>
+  </tr>`).join('');
+}
+
+function removeCustomer(no){
+  const list = getCustomers();
+  const c = findCustomer(no);
+  if(!c) return;
+  if(isOnline()){
+    askPin({title: '🗑 Delete ' + c.name + '?', text: fmtNo(c.no) + (c.dealer ? ' · ' + c.dealer : '') + ' — goes to the Recycle bin for 30 days.',
+      action: pin => api('/api/customers/' + encodeURIComponent(no), {method:'DELETE', body:{pin, by: pcName()}})})
+      .then(ok => { if(!ok) return; custCache.delete(no); saveCustomers(getCustomers().filter(x => x.no !== no)); renderCustomers(); renderBookingSearch(); loadBin(); toast('Moved to Recycle bin: ' + c.name); });
+    return;
+  }
+  if(!confirm('Remove ' + c.name + ' from the customer list?')) return;
+  saveCustomers(list.filter(x => x.no !== no));
+  renderCustomers(); renderBookingSearch(); loadRecipients();
+  toast('Removed ' + c.name);
+}
+
+async function clearCustomers(){
+  const n = isOnline() ? custTotalAll : getCustomers().length;
+  if(!n) return;
+  if(isOnline()){
+    const ok = await askPin({title: '🗑 Delete all ' + n.toLocaleString() + ' customers?',
+      text: 'A full Excel backup downloads first. Then everyone goes to the Recycle bin for 30 days.', word: true, action: async pin => {
+        await api('/api/customers/pin-check', {method:'POST', body:{pin}}); // right PIN before the backup
+        toast('Downloading a backup first…');
+        await exportCustomers();
+        return api('/api/customers', {method:'DELETE', body:{confirm:'DELETE ALL', pin, by: pcName()}});
+      }});
+    if(!ok) return;
+    custCache.clear(); saveCustomers([]); custOffset = 0; renderCustomers(); renderBookingSearch(); loadBin();
+    toast((ok.deleted || 0).toLocaleString() + ' customers moved to the Recycle bin');
+    return;
+  }
+  if(!confirm('Delete all ' + n + ' saved customers? Export to Excel first if you want a copy.')) return;
+  saveCustomers([]);
+  renderCustomers(); renderBookingSearch(); loadRecipients();
+  toast('All customers deleted');
+}
+
+async function exportCustomers(){
+  let list = getCustomers();
+  if(isOnline()){
+    list = [];
+    try{
+      for(let off = 0; ; off += 5000){
+        const d = await api('/api/customers?offset=' + off + '&limit=5000');
+        list = list.concat(d.customers);
+        toast('Preparing Excel… ' + list.length.toLocaleString() + ' of ' + d.total.toLocaleString());
+        if(list.length >= d.total || !d.customers.length) break;
+      }
+    }catch(e){ toast('Could not export: ' + e.message); return; }
+  }
+  if(!list.length){ toast('No customers to export'); return; }
+  const rows = [CUST_EXPORT_HEADERS].concat(list.map(c => [c.name, c.no, c.address, c.dealer, c.code]));
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:22},{wch:16},{wch:45},{wch:22},{wch:16}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Customers');
+  XLSX.writeFile(wb, 'gasdost_customers.xlsx');
+  toast('Exported ' + list.length + ' customers');
+}
+
+/* ---- Delivered history ---- */
+const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+function histQuick(k){
+  const now = new Date(); let f = new Date(now), t = new Date(now);
+  if(k === 1){ f.setDate(f.getDate() - 1); t = new Date(f); }
+  else if(k === 7){ f.setDate(f.getDate() - 6); }
+  else if(k === 'month'){ f = new Date(now.getFullYear(), now.getMonth(), 1); }
+  else if(k === 'lastmonth'){ f = new Date(now.getFullYear(), now.getMonth() - 1, 1); t = new Date(now.getFullYear(), now.getMonth(), 0); }
+  document.getElementById('histFrom').value = ymd(f);
+  document.getElementById('histTo').value = ymd(t);
+  showHistory();
+}
+function fillHistoryWho(){
+  const sel = document.getElementById('histWho');
+  if(!sel) return;
+  const keep = sel.value;
+  const team = getTeam().slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  sel.innerHTML = '<option value="">Everyone</option>' + team.map(m => `<option value="${esc(m.phone)}">${esc(m.name || ('+' + m.phone))}</option>`).join('');
+  sel.value = keep;
+}
+let histRows = [], histLabel = '';
+async function loadHistory(){
+  if(!isOnline()){ toast('Connect to the online database first'); return null; }
+  const f = document.getElementById('histFrom').value, t = document.getElementById('histTo').value || f;
+  if(!f){ toast('Choose a date first'); return null; }
+  if(t < f){ toast('"To" date is before "From" date'); return null; }
+  const sel = document.getElementById('histWho');
+  const who = sel.value;
+  document.getElementById('histSummary').textContent = 'Loading…';
+  const ds = document.getElementById('histDealer');
+  const dealer = ds.value;
+  const d = await api('/api/history?from=' + f + '&to=' + t + '&who=' + encodeURIComponent(who) + '&dealer=' + encodeURIComponent(dealer));
+  histRows = d.rows;
+  histLabel = (f === t ? f : f + ' to ' + t) + ' · ' + sel.options[sel.selectedIndex].text + (dealer ? ' · ' + dealer : '');
+  return d;
+}
+const fmtWhen = t => new Date(t).toLocaleString('en-IN', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+async function showHistory(){
+  let d;
+  try{ d = await loadHistory(); }catch(e){ document.getElementById('histSummary').textContent = 'Could not load: ' + e.message; return; }
+  if(!d) return;
+  const n = histRows.length;
+  document.getElementById('histCount').textContent = n + ' deliver' + (n === 1 ? 'y' : 'ies');
+  // Count per delivery man, busiest first.
+  const per = {};
+  histRows.forEach(r => { const k = r.deliveredName || (r.deliveredBy ? '+' + r.deliveredBy : '—'); per[k] = (per[k] || 0) + 1; });
+  const perTxt = Object.entries(per).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<b>${esc(k)}</b>: ${v}`).join(' · ');
+  const perD = {};
+  histRows.forEach(r => { const k = r.dealer || '—'; perD[k] = (perD[k] || 0) + 1; });
+  const perDTxt = Object.keys(perD).length > 1 ? '<br>🏪 ' + Object.entries(perD).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<b>${esc(k)}</b>: ${v}`).join(' · ') : '';
+  document.getElementById('histSummary').innerHTML = n
+    ? `${esc(histLabel)} — <b>${n}</b> deliver${n === 1 ? 'y' : 'ies'}${perTxt ? '<br>👤 ' + perTxt : ''}${perDTxt}${d.capped ? '<br>⚠️ Showing the first 20,000 — choose fewer days.' : ''}`
+    : esc(histLabel) + ' — no deliveries.';
+  const wrap = document.getElementById('histTableWrap');
+  wrap.style.display = n ? 'block' : 'none';
+  document.getElementById('histBody').innerHTML = histRows.slice(0, 1000).map((r, i) => `<tr>
+      <td class="muted">${i + 1}</td>
+      <td>${esc(r.name || '—')}</td>
+      <td style="white-space:nowrap;">${fmtNo(r.no)}</td>
+      <td>${esc(r.address || '—')}</td>
+      <td>${esc(r.dealer || '—')}</td>
+      <td style="white-space:nowrap;">${esc(fmtWhen(r.deliveredAt))}</td>
+      <td>${esc(r.deliveredName || (r.deliveredBy ? '+' + r.deliveredBy : '—'))}</td>
+    </tr>`).join('') + (n > 1000 ? `<tr><td colspan="7" class="empty-row">First 1,000 shown here — Download Excel has all ${n}.</td></tr>` : '');
+}
+async function downloadHistory(){
+  try{ if(!(await loadHistory())) return; }catch(e){ toast('Could not load: ' + e.message); return; }
+  await showHistory();
+  if(!histRows.length){ toast('No deliveries for these dates'); return; }
+  const rows = [['Customer name', 'Mobile Number', 'Address', 'Dealer Name', 'Delivered date', 'Delivered time', 'Delivered by', 'Delivery man mobile']]
+    .concat(histRows.map(r => { const d = new Date(r.deliveredAt);
+      return [r.name, r.no, r.address, r.dealer, d.toLocaleDateString('en-GB'), d.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'}),
+              r.deliveredName, r.deliveredBy ? r.deliveredBy.slice(2) : '']; }));
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:22},{wch:14},{wch:40},{wch:22},{wch:12},{wch:10},{wch:20},{wch:14}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Deliveries');
+  const f = document.getElementById('histFrom').value, t = document.getElementById('histTo').value || f;
+  const dl = document.getElementById('histDealer').value;
+  XLSX.writeFile(wb, 'gasdost_deliveries_' + f + (t !== f ? '_to_' + t : '') + (dl ? '_' + dl.replace(/[^A-Za-z0-9]+/g, '_') : '') + '.xlsx');
+  toast('Exported ' + histRows.length + ' deliveries');
+}
+// Dealership names for the filter (loaded once, refreshed every few minutes).
+let dealersAt = 0;
+async function loadDealers(){
+  if(!isOnline() || Date.now() - dealersAt < 180000) return;
+  dealersAt = Date.now();
+  try{
+    const d = await api('/api/history?dealers=1');
+    const sel = document.getElementById('histDealer'); const keep = sel.value;
+    sel.innerHTML = '<option value="">All dealerships</option>' + d.dealers.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('');
+    sel.value = keep;
+  }catch(e){ dealersAt = 0; }
+}
+
+// One customer: last two deliveries.
+let histCustTimer = null;
+function histCustSearch(){
+  clearTimeout(histCustTimer);
+  histCustTimer = setTimeout(async () => {
+    const v = document.getElementById('histCust').value.trim();
+    const out = document.getElementById('histCustOut');
+    const digits = v.replace(/\D/g, '');
+    if(digits.length < 4 && v.length < 3){ out.innerHTML = ''; return; }
+    if(!isOnline()){ out.innerHTML = '<div class="hint">Connect to the online database first</div>'; return; }
+    out.innerHTML = '<div class="hint">Loading…</div>';
+    try{
+      const d = await api('/api/history?customer=' + encodeURIComponent(v));
+      if(!d.rows.length){ out.innerHTML = '<div class="hint">No deliveries found for this customer.</div>'; return; }
+      const by = {};
+      d.rows.forEach(r => { (by[r.no] = by[r.no] || []).push(r); });
+      out.innerHTML = Object.values(by).slice(0, 20).map(list => {
+        const c = list[0];
+        return `<div class="hc-card">
+          <div><b>${esc(c.name || '—')}</b> · ${fmtNo(c.no)}${c.dealer ? ' · 🏪 ' + esc(c.dealer) : ''}${c.address ? ' · <span class="muted">' + esc(c.address) + '</span>' : ''}</div>
+          ${list.map((r, i) => `<div class="hc-row"><span>${i === 0 ? '🟢 Last delivery' : '⚪ Before that'}</span>
+            <span><b>${esc(fmtWhen(r.deliveredAt))}</b> · ${esc(r.deliveredName || (r.deliveredBy ? '+' + r.deliveredBy : '—'))}</span></div>`).join('')}
+        </div>`;
+      }).join('');
+    }catch(e){ out.innerHTML = '<div class="hint">Could not load: ' + esc(e.message) + '</div>'; }
+  }, 350);
+}
+(function(){ const el = document.getElementById('histFrom'); if(el){ el.value = ymd(new Date()); document.getElementById('histTo').value = ymd(new Date()); } })();
+
+setTimeout(() => connectOnline(false), 50);
+setInterval(() => refreshOnline(), 30000);
+
+(function giveMissingCodes(){
+  const list = getCustomers();
+  let changed = false;
+  list.forEach(c => { if(!c.code){ c.code = nextCustomerCode(list); changed = true; } });
+  if(changed) saveCustomers(list);
+})();
+renderCustomers();
+renderBookingSearch();
+
+function downloadQr(){
+  if(!lastQrDataUrl){ toast('Generate the QR code first'); return; }
+  const a = document.createElement('a');
+  a.href = lastQrDataUrl;
+  a.download = 'gasdost-bookings-qr' + (qrParts.length > 1 ? '-' + (qrPartIdx + 1) + '-of-' + qrParts.length : '') + '.png';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+</script>
+</body>
+</html>

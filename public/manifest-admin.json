@@ -1,0 +1,16 @@
+{
+  "id": "./lm_admin_app.html",
+  "name": "GasDost Admin",
+  "short_name": "GasDost Admin",
+  "description": "Office console for GasDost: bookings, customers, delivery status.",
+  "start_url": "./lm_admin_app.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6f9",
+  "theme_color": "#c62828",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

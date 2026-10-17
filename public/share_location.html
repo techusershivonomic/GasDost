@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#c62828">
+<title>GasDost — Share your location</title>
+<link rel="icon" href="icons/favicon-32.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root{
+    --brand:#c62828; --brand-dark:#9b1919; --blue:#0a6cff; --green:#1caa5c;
+    --bg:#f4f6f9; --card:#fff; --text:#1c2530; --muted:#6b7684; --border:#e2e6ec;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-size:15px;line-height:1.55;
+       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;}
+  .frame{max-width:480px;margin:0 auto;background:var(--bg);min-height:100vh;}
+  header{background:linear-gradient(135deg,var(--brand),var(--brand-dark));color:#fff;
+         padding:calc(14px + env(safe-area-inset-top)) 18px 14px;display:flex;align-items:center;gap:10px;}
+  header h1{font-size:16.5px;margin:0;font-weight:700;}
+  .wrap{padding:16px 14px calc(26px + env(safe-area-inset-bottom));}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:14px;}
+  .card h2{font-size:16px;margin:0 0 8px;}
+  .verified{background:#eefaf2;border:1px solid #c9e8d6;color:#0c5f36;border-radius:10px;
+            padding:10px 12px;font-size:12.5px;margin-bottom:14px;line-height:1.5;}
+  .row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13.5px;}
+  .row:last-child{border-bottom:none;}
+  .row span:first-child{color:var(--muted);}
+  .row span:last-child{font-weight:600;text-align:right;}
+  .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 16px;
+       border-radius:11px;border:none;font-size:15px;font-weight:700;cursor:pointer;margin-top:10px;}
+  .btn-primary{background:var(--blue);color:#fff;}
+  .btn-ghost{background:#eef1f5;color:var(--text);}
+  .btn-send{background:#1caa5c;color:#fff;}
+  .btn-wa{background:#25D366;color:#fff;}
+  .btn:disabled{opacity:.5;}
+  .map{height:280px;border-radius:12px;border:1px solid var(--border);margin-top:12px;isolation:isolate;}
+  .hint{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.5;}
+  .error{color:#d33;font-size:13px;margin-top:8px;min-height:16px;}
+  .ok{background:#eefaf2;border:1px solid #c9e8d6;color:#0c5f36;border-radius:11px;
+      padding:14px;margin-top:12px;font-size:14px;line-height:1.55;}
+  .pin-note{background:#f0f6ff;border:1px solid #cfe1ff;color:#0850c4;border-radius:10px;
+            padding:9px 11px;font-size:12.5px;margin-top:10px;}
+  .foot{text-align:center;color:var(--muted);font-size:11.5px;padding:0 18px 20px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="frame">
+
+<header>
+  <span style="font-size:20px;">⛽</span>
+  <h1>GasDost</h1>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <div class="verified">✅ This is a genuine request from <b class="dealer-name">GasDost</b> about your cylinder booking. We are only asking for your location — nothing else, and no payment.</div>
+
+    <h2 id="greeting">Share your location</h2>
+    <p class="hint" style="margin-top:0;">So our delivery partner can find your door without calling you for directions.</p>
+
+    <div id="details" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>Set your location</h2>
+    <button class="btn btn-primary" onclick="useMyLocation()">📍 Use my current location</button>
+    <button class="btn btn-ghost" onclick="showMapPicker()">🗺️ Set it on the map myself</button>
+    <div class="error" id="err"></div>
+
+    <div id="mapWrap" style="display:none;">
+      <div class="map" id="map"></div>
+      <div class="pin-note" id="pinNote">Tap anywhere on the map to move the pin, or drag it. Put it on your building entrance.</div>
+      <div class="hint" id="coords"></div>
+    </div>
+
+    <button class="btn btn-send" id="sendBtn" onclick="sendLocation()" style="display:none;">✅ Confirm my location</button>
+    <div id="done" style="display:none;"></div>
+  </div>
+
+</div>
+
+<div class="foot">
+  Your location is shared only with your gas agency and its delivery partners.<br><span style="opacity:.6;">Build 29 · 12 Oct 2026</span>
+</div>
+
+</div>
+
+<script>
+/* ---------------- what the link told us ----------------
+   Everything this page knows comes from the link itself — there is no account
+   and no database here. The customer's own details are in the link so the page
+   can greet them properly and look legitimate rather than like a scam. */
+function readParams(){
+  const raw = location.hash.replace(/^#/, '');
+  const out = {};
+  raw.split('&').forEach(pair => {
+    const i = pair.indexOf('=');
+    if(i > 0){
+      try{ out[pair.slice(0, i)] = decodeURIComponent(pair.slice(i + 1).replace(/\+/g, ' ')); }
+      catch(e){ out[pair.slice(0, i)] = pair.slice(i + 1); }
+    }
+  });
+  return out;
+}
+const P = readParams();
+// New links carry only a secret code (t) — the details are fetched from the
+// office database with it. Older links carried the details themselves.
+const TOKEN = /^[A-Za-z0-9_-]{16,64}$/.test(P.t || '') ? P.t : '';
+let CUST_NO = (P.c || '').replace(/\D/g, '');
+let CUST_NAME = P.n || '';
+const BOOKING = P.b || '';
+const PARTNER = (P.d || '').replace(/\D/g, '');
+let ADDRESS = P.a || '';
+let DEALER = P.g || '';
+let SAVED_BEFORE = null; // location already on record for this customer
+
+function esc(s){
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function fillDetails(){
+  if(DEALER){
+    document.querySelectorAll('.dealer-name').forEach(el => el.textContent = DEALER);
+  }
+  if(CUST_NAME){
+    document.getElementById('greeting').textContent = 'Hi ' + CUST_NAME.split(' ')[0] + ', share your location';
+  }
+  // Lead with the name. It is the detail that tells the customer this really
+  // came from someone holding their record, which is the whole point of the
+  // page looking legitimate.
+  const rows = [];
+  if(CUST_NAME) rows.push(['Name', CUST_NAME]);
+  if(CUST_NO)   rows.push(['Registered mobile', '+91 ' + CUST_NO.slice(0,5) + ' ' + CUST_NO.slice(5)]);
+  if(ADDRESS)   rows.push(['Address', ADDRESS]);
+  if(DEALER)    rows.push(['Dealer', DEALER]);
+  // A booking id of BK-<their own mobile> is auto-generated and says nothing,
+  // so only show one the office actually assigned.
+  if(BOOKING && BOOKING.replace(/\D/g,'') !== CUST_NO) rows.push(['Booking', BOOKING]);
+  if(PARTNER)   rows.push(['Delivery partner', '+' + PARTNER.slice(0,2) + ' ' + PARTNER.slice(2,7) + ' ' + PARTNER.slice(7)]);
+  document.getElementById('details').innerHTML =
+    rows.map(r => `<div class="row"><span>${esc(r[0])}</span><span>${esc(r[1])}</span></div>`).join('');
+}
+
+(async function start(){
+  if(!TOKEN){ fillDetails(); return; }
+  document.getElementById('details').innerHTML = '<div class="hint">Loading your details…</div>';
+  try{
+    const r = await fetch('/api/c/' + encodeURIComponent(TOKEN), {cache:'no-store'});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.error || 'This link could not be opened.');
+    CUST_NO = d.mobile || CUST_NO;
+    CUST_NAME = d.name || CUST_NAME;
+    ADDRESS = d.address || ADDRESS;
+    DEALER = d.dealer || DEALER;
+    SAVED_BEFORE = d.location;
+    fillDetails();
+    if(SAVED_BEFORE){
+      const when = new Date(SAVED_BEFORE.at).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'});
+      document.getElementById('details').insertAdjacentHTML('beforeend',
+        `<div class="pin-note" style="margin-top:12px;">📍 We already have your location from ${esc(when)}. If you have moved, set the new one below — otherwise there is nothing more to do.</div>`);
+      chosen = [SAVED_BEFORE.lat, SAVED_BEFORE.lng];
+    }
+  }catch(e){
+    document.getElementById('details').innerHTML =
+      `<div class="error" style="min-height:0;">${esc(e.message === 'Failed to fetch' ? 'No internet connection. Please check it and open the link again.' : e.message)}</div>`;
+  }
+})();
+
+/* ---------------- map ---------------- */
+const FALLBACK_CENTRE = [19.2183, 72.9781]; // Thane, until we know better
+let map = null, pin = null, chosen = null, chosenAcc = null;
+
+function tileLayer(){
+  return L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    {maxZoom:19, attribution:'Tiles &copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors'});
+}
+
+function ensureMap(centre, zoom){
+  document.getElementById('mapWrap').style.display = 'block';
+  if(!map){
+    map = L.map('map').setView(centre, zoom);
+    tileLayer().addTo(map);
+    map.on('click', e => { chosenAcc = null; setPin(e.latlng.lat, e.latlng.lng); });
+  } else {
+    map.setView(centre, zoom);
+  }
+  setTimeout(() => map.invalidateSize(), 60);
+}
+
+function setPin(lat, lng){
+  chosen = [lat, lng];
+  const btn = document.getElementById('sendBtn');
+  if(btn) btn.style.display = 'flex';
+  if(pin){ pin.setLatLng(chosen); }
+  else{
+    pin = L.marker(chosen, {draggable:true}).addTo(map);
+    pin.on('dragend', () => { const p = pin.getLatLng(); chosen = [p.lat, p.lng]; chosenAcc = null; showCoords();
+      document.getElementById('sendBtn').style.display = 'flex'; });
+  }
+  showCoords();
+  document.getElementById('sendBtn').style.display = 'flex';
+}
+
+function showCoords(){
+  document.getElementById('coords').textContent =
+    'Pin is at ' + chosen[0].toFixed(5) + ', ' + chosen[1].toFixed(5) + ' — drag it if it is not exactly right.';
+}
+
+function useMyLocation(){
+  const err = document.getElementById('err');
+  err.textContent = '';
+  if(!navigator.geolocation){
+    err.textContent = 'This browser cannot find your location. Use "Set it on the map myself" instead.';
+    showMapPicker();
+    return;
+  }
+  err.textContent = 'Finding your location…';
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      err.textContent = '';
+      chosenAcc = pos.coords.accuracy;
+      ensureMap([pos.coords.latitude, pos.coords.longitude], 17);
+      setPin(pos.coords.latitude, pos.coords.longitude);
+      document.getElementById('pinNote').textContent =
+        'This is where your phone says you are. If the pin is off, drag it onto your building entrance.';
+    },
+    e => {
+      err.textContent = e && e.code === 1
+        ? 'Location permission was refused. You can still place the pin yourself on the map below.'
+        : 'Could not get your location. Please place the pin yourself on the map below.';
+      showMapPicker();
+    },
+    {enableHighAccuracy:true, timeout:12000}
+  );
+}
+
+function showMapPicker(){
+  ensureMap(chosen || FALLBACK_CENTRE, chosen ? 17 : 13);
+  if(chosen && !pin) setPin(chosen[0], chosen[1]);
+}
+
+/* ---------------- sending it back ----------------
+   There is no shared database yet, so the location travels back the same way
+   the link arrived: over WhatsApp. The message carries a Google Maps link the
+   delivery partner can open, plus a link that drops the location straight into
+   his app. */
+async function sendLocation(){
+  if(!chosen) return;
+  if(TOKEN){
+    const btn = document.getElementById('sendBtn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try{
+      const r = await fetch('/api/c/' + encodeURIComponent(TOKEN), {
+        method:'POST', headers:{'content-type':'application/json'},
+        body: JSON.stringify({lat: chosen[0], lng: chosen[1], acc: chosenAcc, partner: PARTNER})
+      });
+      const d = await r.json().catch(() => ({}));
+      if(!r.ok) throw new Error(d.error || 'Could not save');
+      btn.style.display = 'none';
+      const done = document.getElementById('done');
+      done.style.display = 'block';
+      done.className = 'ok';
+      done.innerHTML = '✅ <b>Location saved. Thank you!</b><br>Your delivery partner can see it now. You can close this page.' +
+        '<div style="margin-top:10px;font-size:12.5px;">Moved the pin by mistake? Drag it again and press Confirm once more.</div>';
+      setTimeout(() => { btn.disabled = false; btn.textContent = '✅ Confirm my location'; }, 1500);
+      pin && pin.once('dragend', () => { btn.style.display = 'flex'; });
+      return;
+    }catch(e){
+      btn.disabled = false; btn.textContent = '✅ Confirm my location';
+      const done = document.getElementById('done');
+      done.style.display = 'block';
+      done.className = 'error';
+      done.innerHTML = 'Could not save just now' + (e.message === 'Failed to fetch' ? ' — please check your internet' : '') +
+        '. Press Confirm to try again, or <a href="#" onclick="sendViaWhatsApp();return false;">send it on WhatsApp instead</a>.';
+      return;
+    }
+  }
+  sendViaWhatsApp();
+}
+
+function sendViaWhatsApp(){
+  if(!chosen) return;
+  const lat = chosen[0].toFixed(6), lng = chosen[1].toFixed(6);
+  const mapsLink = 'https://maps.google.com/?q=' + lat + ',' + lng;
+
+  let msg = (CUST_NAME ? CUST_NAME + ' here. ' : '') + 'This is my delivery location';
+  if(BOOKING) msg += ' for booking ' + BOOKING;
+  msg += '.\n\n' + mapsLink + '\n\n';
+
+  const base = location.origin + location.pathname.replace(/[^/]*$/, '');
+  msg += 'Save to app: ' + base + 'lm_delivery_app.html#setloc=' + CUST_NO + ',' + lat + ',' + lng + '\n\n';
+  msg += 'Sent from the GasDost location link.';
+
+  const done = document.getElementById('done');
+  done.style.display = 'block';
+  done.className = 'ok';
+  done.innerHTML = '✅ <b>Opening WhatsApp…</b><br>Press send in WhatsApp to finish — your location is not shared until you do.'+
+    '<div style="margin-top:10px;font-size:12.5px;">If WhatsApp did not open, '+
+    '<a href="' + esc(mapsLink) + '" target="_blank" rel="noopener">tap here to see your pin</a> and send it to your delivery partner yourself.</div>';
+
+  const wa = PARTNER
+    ? 'https://wa.me/' + PARTNER + '?text=' + encodeURIComponent(msg)
+    : 'https://wa.me/?text=' + encodeURIComponent(msg);
+  window.open(wa, '_blank');
+}
+</script>
+</body>
+</html>

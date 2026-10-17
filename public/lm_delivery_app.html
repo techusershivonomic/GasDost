@@ -1,0 +1,2675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>GasDost — Delivery</title>
+<script src="i18n.js"></script>
+<script src="install.js"></script>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#c62828">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GasDost">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="vendor/qr-scanner.umd.min.js"></script> <!-- kept on our own site so its decoder always loads -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --blue:#0a6cff; --blue-dark:#0850c4; --brand:#c62828; --brand-dark:#9b1919; --green:#1caa5c; --amber:#e08a00;
+    --bg:#f4f6f9; --card:#ffffff; --text:#1c2530; --muted:#6b7684; --border:#e2e6ec;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-tap-highlight-color:transparent;background:#dde2e8;}
+  /* App is always rendered at phone width — even on a laptop browser — so it
+     looks and behaves like a mobile app, not a stretched desktop dashboard. */
+  body{margin:0 auto;max-width:480px;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);padding-bottom:calc(78px + env(safe-area-inset-bottom));position:relative;box-shadow:0 0 40px rgba(0,0,0,.12);}
+  header{background:linear-gradient(135deg,var(--brand),var(--brand-dark));color:#fff;padding:calc(14px + env(safe-area-inset-top)) 18px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;position:sticky;top:0;z-index:50;}
+  header h1{font-size:17px;margin:0;font-weight:700;display:flex;align-items:center;gap:8px;}
+  header .badge{background:rgba(255,255,255,.18);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500;}
+  #whoBtn{display:none;background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
+  /* login screen — full-viewport overlay shown until the delivery man logs in with his mobile number.
+     z-index is deliberately very high because Leaflet's internal map controls/popups use z-index up
+     to 1000 of their own — this guarantees the login screen always wins regardless. */
+  .stat-tile[data-stat]{cursor:pointer;transition:box-shadow .15s;}
+  .stat-tile.stat-on{box-shadow:0 0 0 3px rgba(10,108,255,.35);}
+  .sl-row{border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:8px;background:#fff;}
+  .sl-top{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:15px;}
+  .sl-sub{font-size:12.5px;color:var(--muted);margin-top:3px;}
+  .sl-badge{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap;}
+  .sl-done{background:#e6f7ee;color:#0f7a41;} .sl-live{background:#e4efff;color:#0850c4;} .sl-wait{background:#fff3e0;color:#8a5a00;}
+  .po-box{flex-direction:column;gap:6px;margin-top:8px;padding:8px;background:#f4f7fb;border-radius:10px;}
+  .po-box .btn{width:100%;text-align:left;margin:0;}
+  .po-office{background:#ffb020;color:#222;font-weight:700;}
+  .po-no{opacity:.6;font-size:12px;margin-left:6px;}
+  .sl-acts{display:flex;gap:8px;margin-top:8px;} .sl-acts .btn{margin:0;padding:9px 10px;font-size:14px;}
+  .login-screen{position:fixed;inset:0;z-index:9999;background:linear-gradient(160deg,var(--brand),var(--brand-dark));display:flex;align-items:center;justify-content:center;padding:24px;}
+  .login-screen.hidden{display:none;}
+  .login-card{background:#fff;border-radius:18px;padding:30px 24px;max-width:340px;width:100%;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.3);}
+  .login-icon{font-size:38px;margin-bottom:6px;}
+  .login-title{font-size:19px;margin:0 0 8px;color:var(--text);font-weight:700;}
+  .login-sub{font-size:13px;color:var(--muted);margin:0 0 18px;line-height:1.5;}
+  .login-phone-row{display:flex;gap:8px;}
+  .login-cc{display:flex;align-items:center;padding:0 12px;border:1px solid var(--border);border-radius:9px;font-size:16px;font-weight:700;color:var(--text);background:#f6f8fb;}
+  .login-phone-row input{flex:1;}
+  /* bottom tab bar — native-app style, thumb reachable, pinned to the phone-width frame */
+  nav{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;max-width:480px;display:flex;background:var(--card);border-top:1px solid var(--border);padding:6px 4px calc(6px + env(safe-area-inset-bottom));z-index:100;box-shadow:0 -2px 10px rgba(0,0,0,.08);}
+  nav button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:none;background:transparent;padding:8px 1px;min-height:52px;border-radius:10px;cursor:pointer;font-size:8.5px;font-weight:600;color:var(--muted);white-space:normal;line-height:1.15;text-align:center;}
+  nav button .navicon{font-size:17px;line-height:1;}
+  nav button.active{color:var(--blue);background:#eaf2ff;}
+  main{padding:14px 14px 20px;}
+  .panel{display:none;}
+  .panel.active{display:block;}
+  .grid{display:grid;grid-template-columns:1fr;gap:14px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:16px;}
+  .card h2{font-size:15px;margin:0 0 12px;}
+  .card h3{font-size:13px;color:var(--muted);margin:0 0 6px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;}
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px;font-weight:500;}
+  input[type=text]{width:100%;padding:13px 12px;border:1px solid var(--border);border-radius:9px;font-size:16px;letter-spacing:.5px;}
+  input[type=text]:focus{outline:2px solid var(--blue);border-color:var(--blue);}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 16px;border-radius:9px;border:none;font-size:15px;font-weight:600;cursor:pointer;width:100%;margin-top:10px;min-height:46px;}
+  .btn-primary{background:var(--blue);color:#fff;}
+  .btn-primary:hover{background:var(--blue-dark);}
+  .btn-wa{background:#25D366;color:#fff;}
+  .btn-wa:hover{background:#1eb857;}
+  .btn-ghost{background:#eef1f5;color:var(--text);}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px;}
+  .error{color:#d33;font-size:13px;margin-top:8px;}
+  .consumer-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px;}
+  .consumer-row:last-child{border-bottom:none;}
+  .consumer-row span:first-child{color:var(--muted);}
+  .status-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;}
+  .status-waiting{background:#fff3e0;color:var(--amber);}
+  .status-shared{background:#e8effe;color:var(--blue);}
+  .status-delivered{background:#e6f7ec;color:var(--green);}
+  @keyframes mypulse{0%{transform:scale(.8);opacity:.9;}70%{transform:scale(2.2);opacity:0;}100%{transform:scale(2.2);opacity:0;}}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:11.5px;color:var(--muted);font-weight:600;}
+  .legend span{display:flex;align-items:center;gap:5px;}
+  .legend i{width:13px;height:13px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+            color:#fff;font-size:9px;font-weight:900;font-style:normal;line-height:1;}
+  .pin-note{background:#f0f6ff;border:1px solid #cfe1ff;color:#0850c4;border-radius:10px;padding:9px 11px;font-size:12px;line-height:1.5;}
+  .route-summary{display:flex;gap:10px;margin-bottom:12px;}
+  .route-stat{flex:1;background:#f6f8fb;border:1px solid var(--border);border-radius:10px;padding:10px 8px;text-align:center;}
+  .route-stat b{display:block;font-size:19px;line-height:1.1;color:var(--blue);}
+  .route-stat span{font-size:10.5px;color:var(--muted);font-weight:600;}
+  .stop{display:flex;gap:11px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--border);}
+  .stop:last-child{border-bottom:none;}
+  .stop-num{flex:none;width:25px;height:25px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;
+            font-weight:800;display:flex;align-items:center;justify-content:center;margin-top:1px;}
+  .stop-body{flex:1;min-width:0;}
+  .stop-name{font-weight:700;font-size:13.5px;}
+  .stop-meta{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.45;}
+  .stop-go{flex:none;background:var(--blue);color:#fff;border:none;border-radius:8px;padding:7px 10px;
+           font-size:11.5px;font-weight:700;cursor:pointer;align-self:center;}
+  .stop-btns{flex:none;display:flex;flex-direction:column;gap:6px;align-self:center;}
+  .stop-btns .stop-go{align-self:stretch;}
+  .stop-done{background:var(--green);color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap;}
+  .undo-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));z-index:1000;background:#1c2530;color:#fff;
+            border-radius:12px;padding:10px 12px 10px 16px;font-size:13.5px;display:none;align-items:center;gap:14px;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:92vw;}
+  .undo-bar.show{display:flex;}
+  .undo-bar button{background:#fff;color:#1c2530;border:none;border-radius:8px;padding:7px 14px;font-weight:800;font-size:13px;cursor:pointer;}
+  .next-card{border:2px solid var(--blue);}
+  .next-head{font-size:13px;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:.04em;display:flex;justify-content:space-between;align-items:center;}
+  .next-head span{background:#eef4ff;color:var(--blue-dark);border-radius:20px;padding:3px 10px;font-size:12px;letter-spacing:0;text-transform:none;}
+  .next-name{font-size:22px;font-weight:800;margin:10px 0 4px;line-height:1.2;}
+  .next-addr{font-size:15px;color:var(--muted);line-height:1.4;}
+  .next-meta{font-size:13px;color:var(--muted);margin-top:6px;}
+  .next-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;}
+  .next-btns .btn{margin:0;min-height:62px;font-size:19px;font-weight:800;border-radius:14px;}
+  .next-btns .btn-done{grid-column:1 / -1;background:var(--green);color:#fff;min-height:70px;font-size:21px;}
+  .next-btns .btn-call{background:#fff3e0;color:#b45f00;text-decoration:none;}
+  .next-skip{display:block;margin:12px auto 0;background:none;border:none;color:var(--muted);font-size:14px;font-weight:700;cursor:pointer;padding:6px 12px;}
+  .next-done{text-align:center;font-size:24px;font-weight:800;padding:18px 0 8px;color:var(--green);}
+  .upload-note{display:flex;align-items:center;gap:9px;background:#f0f6ff;border:1px solid #cfe1ff;color:#0850c4;border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.45;margin-bottom:12px;font-weight:600;}
+  .stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px;}
+  .stat-tile{border-radius:12px;padding:14px 8px;text-align:center;}
+  .stat-num{font-size:26px;font-weight:800;line-height:1;}
+  .stat-label{font-size:11px;font-weight:600;margin-top:6px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;}
+  .stat-total{background:#eef2ff;} .stat-total .stat-num{color:var(--blue);}
+  .stat-pending{background:#fff3e0;} .stat-pending .stat-num{color:var(--amber);}
+  .stat-delivered{background:#e6f7ec;} .stat-delivered .stat-num{color:var(--green);}
+  .dot{width:7px;height:7px;border-radius:50%;background:currentColor;}
+  /* isolation:isolate traps Leaflet's internal z-index stack (controls/popups go up to 1000)
+     inside the map box itself, so it can never render above sibling UI like the nav bar or
+     the login screen no matter what z-index Leaflet assigns internally. */
+  .map{height:280px;border-radius:14px;overflow:hidden;border:1px solid var(--border);isolation:isolate;}
+  .map-tall{height:420px;}
+  #liveList{margin-top:14px;}
+  .lc-item{display:flex;flex-direction:column;align-items:stretch;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;font-size:13px;cursor:pointer;}
+  .lc-item:hover{background:#f8f9fb;}
+  .lc-item b{display:block;font-size:14px;}
+  .lc-item .meta{color:var(--muted);font-size:12px;}
+  .nav-btn{border:none;background:var(--blue);color:#fff;font-size:11px;font-weight:700;padding:6px 9px;border-radius:8px;cursor:pointer;white-space:nowrap;}
+  .nav-btn:hover{background:var(--blue-dark);}
+  .nav-btn.delivered-btn{background:var(--green);}
+  .nav-btn.delivered-btn:hover{background:#158a4a;}
+  .waEditor{background:#f6f8fb;border:1px solid var(--border);border-radius:10px;padding:12px;font-size:13px;color:var(--muted);white-space:pre-wrap;margin-top:10px;line-height:1.5;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand-icon{width:30px;height:30px;border-radius:8px;background:#fff;color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;}
+  .consumer-link-frame{max-width:420px;margin:0 auto;}
+  .genuine-box{background:#e6f7ec;border:1px solid #b7e6c6;color:#177a41;border-radius:10px;padding:10px 12px;font-size:12.5px;display:flex;gap:8px;margin-bottom:14px;}
+  /* segmented control — used inside the Add Booking tab for Manual vs Scan QR */
+  .seg-control{display:flex;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:5px;margin-bottom:14px;}
+  .seg-btn{flex:1;border:none;background:transparent;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--muted);}
+  .seg-btn.active{background:var(--blue);color:#fff;}
+  .seg-panel{display:none;}
+  .seg-panel.active{display:block;}
+  #qrVideoWrap{border-radius:14px;overflow:hidden;background:#000;margin-bottom:10px;isolation:isolate;}
+  #qrVideo{width:100%;display:block;max-height:320px;object-fit:cover;}
+  .center{text-align:center;}
+  .small{font-size:12px;color:var(--muted);}
+  code.tok{background:#eef1f5;padding:2px 6px;border-radius:6px;font-size:12px;}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1c2530;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:999;}
+  .toast.show{opacity:1;}
+  .pulse{width:14px;height:14px;border-radius:50%;background:var(--green);position:relative;display:inline-block;}
+  .pulse::after{content:'';position:absolute;inset:0;border-radius:50%;background:var(--green);animation:pulse 1.6s infinite;}
+  @keyframes pulse{0%{transform:scale(1);opacity:.7;}100%{transform:scale(2.4);opacity:0;}}
+  .leaflet-tooltip.no-label{background:var(--blue);color:#fff;border:none;font-weight:700;font-size:12px;padding:3px 8px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.3);}
+  .leaflet-tooltip.no-label::before{border-top-color:var(--blue);}
+  .cb{border-radius:12px;padding:12px;margin:4px 0 12px;text-align:left;}
+  .cb-ok{background:#eaf8f0;color:#137a3f;font-weight:700;font-size:14px;}
+  .cb-no{background:#fff2f2;border:1.5px solid #e2a3a3;}
+  .cb-no .cb-title{color:#b42318;font-weight:800;font-size:15px;margin-bottom:8px;}
+  .cb-no .btn{margin:6px 0 0;}
+  .cb-code{display:flex;gap:8px;margin-top:8px;}
+  .cb-code input{flex:1;font-size:20px;letter-spacing:4px;text-align:center;}
+  .cb-code .btn{width:auto;margin:0;}
+  .pair-scan{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;}
+  .pair-scan-card{background:#fff;border-radius:16px;padding:16px;width:100%;max-width:420px;text-align:center;}
+  .pair-scan-card video{width:100%;border-radius:12px;background:#000;max-height:60vh;object-fit:cover;}
+</style>
+</head>
+<body>
+
+<!-- Scan the office's setup QR from inside the app (works in the installed app too). -->
+<div id="pairScan" class="pair-scan" style="display:none;">
+  <div class="pair-scan-card">
+    <div style="font-weight:800;font-size:17px;margin-bottom:8px;">📷 Point at the QR code on the office screen</div>
+    <video id="pairVideo" playsinline muted></video>
+    <div class="error" id="pairScanErr"></div>
+    <button class="btn btn-ghost" onclick="stopPairScan()">Close</button>
+  </div>
+</div>
+
+<!-- ============ LOGIN ============ -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <div data-lang-slot="big"></div>
+    <div class="login-icon">⛽</div>
+    <h1 class="login-title">GasDost</h1>
+    <p class="login-sub">Login with your name and mobile number to start taking deliveries. The office sees your name on the delivery status screen, and customers see your number when you send them a tracking link.</p>
+    <div style="text-align:left;">
+      <label for="loginNameInput">Your name</label>
+      <input type="text" id="loginNameInput" maxlength="40" autocomplete="name" placeholder="e.g. Suresh Kadam" style="margin-bottom:14px;">
+      <label for="loginPhoneInput">Your mobile number</label>
+      <div class="login-phone-row">
+        <span class="login-cc">+91</span>
+        <input type="text" id="loginPhoneInput" maxlength="10" inputmode="numeric" placeholder="10-digit mobile number">
+      </div>
+      <div class="error" id="loginError"></div>
+    </div>
+    <div id="connectBox"></div>
+    <button class="btn btn-primary" onclick="login()">Login</button>
+    <button class="install-btn install-big" onclick="installApp()">⬇ Install GasDost on this phone</button>
+  </div>
+</div>
+
+<header>
+  <h1><span class="brand-icon">⛽</span> GasDost</h1>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span data-lang-slot></span>
+    <span id="netDot" title="" style="font-size:12px;color:#fff;opacity:.9;"></span>
+    <button id="whoBtn" onclick="showLogoutConfirm()"></button>
+    <button id="installBtn" class="install-btn" onclick="installApp()" title="Install GasDost on this phone">⬇ Install</button>
+  </div>
+</header>
+
+<nav>
+  <button class="tab-btn active" data-tab="dashboard"><span class="navicon">🚚</span>Dashboard</button>
+  <button class="tab-btn" data-tab="addbooking"><span class="navicon">➕</span>Add</button>
+  <button class="tab-btn" data-tab="setloc"><span class="navicon">📍</span>Location</button>
+  <button class="tab-btn" data-tab="consumer"><span class="navicon">💬</span>Consumer</button>
+  <button class="tab-btn" data-tab="live"><span class="navicon">🗺️</span>Map</button>
+</nav>
+
+<main>
+
+  <!-- ============ DASHBOARD ============ -->
+  <section class="panel active" id="dashboard">
+    <div class="upload-note" id="uploadNote" style="display:none;"></div>
+    <div class="card">
+      <h2>Today's bookings</h2>
+      <div class="stat-grid">
+        <div class="stat-tile stat-total" data-stat="all" onclick="showStatList('all')" role="button">
+          <div class="stat-num" id="stat_total">0</div>
+          <div class="stat-label">Total</div>
+        </div>
+        <div class="stat-tile stat-pending" data-stat="pending" onclick="showStatList('pending')" role="button">
+          <div class="stat-num" id="stat_pending">0</div>
+          <div class="stat-label">Pending</div>
+        </div>
+        <div class="stat-tile stat-delivered" data-stat="delivered" onclick="showStatList('delivered')" role="button">
+          <div class="stat-num" id="stat_delivered">0</div>
+          <div class="stat-label">Delivered</div>
+        </div>
+      </div>
+      <div class="hint">Tap a number to see those bookings.</div>
+      <div id="statList" style="display:none;margin-top:12px;"></div>
+      <div class="hint" id="buildTag" style="margin-top:10px;opacity:.75;"></div>
+    </div>
+
+    <div class="card next-card" id="nextCard">
+      <div class="next-head">🚚 Next delivery <span id="nextLeft"></span></div>
+      <div id="nextBody"></div>
+    </div>
+    <div class="card" id="findCard">
+      <div class="next-head" style="color:var(--text);">🔍 Find customer</div>
+      <input type="search" id="findInput" placeholder="Name or mobile number" autocomplete="off" oninput="renderFind()" style="margin-top:10px;font-size:17px;">
+      <div id="findList"></div>
+    </div>
+    <div class="card">
+      <h2>Plan today's run</h2>
+      <p class="small">Puts your pending bookings in a sensible order starting from where you are now, so you're not criss-crossing the city.</p>
+      <button class="btn btn-primary" onclick="planRoute()">🧭 Plan route from my location</button>
+      <div class="error" id="routeError"></div>
+      <div class="hint" id="routeHint">Only bookings that aren't delivered yet are included. Mark one delivered and plan again to drop it from the run.</div>
+    </div>
+
+    <div class="card" id="routeResultCard" style="display:none;">
+      <div class="pin-note" id="routeScope" style="margin-bottom:12px;"></div>
+      <div class="route-summary" id="routeSummary"></div>
+      <button class="btn btn-wa" onclick="openRouteInMaps()">🚗 Open whole route in Google Maps</button>
+      <button class="btn btn-ghost" onclick="navigateToNextStop()">➡️ Navigate to stop 1 only</button>
+      <button class="btn btn-ghost" onclick="document.querySelector('[data-tab=live]').click();window.scrollTo(0,0)">🗺️ See route on map</button>
+      <div class="hint">Each stop is the nearest one left to visit, measured straight-line — close enough in town. Google Maps handles the actual roads and turn-by-turn once you tap through.</div>
+      <h3 style="margin:16px 0 6px;font-size:14px;">Stops in order</h3>
+      <div id="routeList"></div>
+    </div>
+  </section>
+
+  <!-- ============ ADD BOOKING ============ -->
+  <section class="panel" id="addbooking">
+    <div class="seg-control">
+      <button class="seg-btn active" data-seg="manual" onclick="switchAddSeg('manual')">✍️ Manual</button>
+      <button class="seg-btn" data-seg="bulk" onclick="switchAddSeg('bulk')">📊 Bulk Upload</button>
+      <button class="seg-btn" data-seg="scan" onclick="switchAddSeg('scan')">📷 Scan QR</button>
+    </div>
+
+    <!-- Manual entry -->
+    <div class="seg-panel active" id="seg-manual">
+      <div class="card">
+        <h2>Add a mobile number</h2>
+        <label for="manualNoInput">Mobile number (10 digits)</label>
+        <input type="text" id="manualNoInput" maxlength="10" placeholder="e.g. 9876543210" inputmode="numeric" oninput="manualNoTyped()">
+        <div class="hint" id="manualFound" style="display:none;color:var(--green);"></div>
+        <label for="manualNameInput" style="margin-top:12px;">Customer name</label>
+        <input type="text" id="manualNameInput" maxlength="60" placeholder="e.g. Ramesh Patil" autocomplete="off">
+        <label for="manualAddrInput" style="margin-top:12px;">Address (optional)</label>
+        <input type="text" id="manualAddrInput" maxlength="200" placeholder="e.g. Flat 12, Shanti Niwas, Naupada" autocomplete="off">
+        <button class="btn btn-primary" onclick="addManualBooking()">➕ Add booking</button>
+        <div class="error" id="manualAddError"></div>
+        <div class="hint">If the customer is already saved at the office, the name and address fill in by themselves.</div>
+      </div>
+    </div>
+
+    <!-- Bulk upload via Excel (no QR needed) -->
+    <div class="seg-panel" id="seg-bulk">
+      <div class="card">
+        <h2>Bulk add from Excel</h2>
+        <p class="small">Download the template, fill in one row per customer — mobile number and name — then upload it here. Same template the office uses.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;">
+          <button class="btn btn-ghost" onclick="downloadTemplate()">⬇ Download template</button>
+          <label class="btn btn-primary" style="cursor:pointer;margin:0;">
+            ⬆ Upload filled template
+            <input type="file" id="bulkXlsxInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleBulkXlsxUpload(event)">
+          </label>
+        </div>
+        <div class="error" id="bulkXlsxError"></div>
+        <div id="bulkXlsxSummary" style="display:none;margin-top:12px;" class="genuine-box"></div>
+      </div>
+    </div>
+
+    <!-- QR bulk scan -->
+    <div class="seg-panel" id="seg-scan">
+      <div class="card">
+        <h2>Scan bulk booking QR</h2>
+        <p class="small">Ask the office to generate a bulk booking QR code from the admin app, then scan it here to import all those bookings at once.</p>
+        <div id="qrVideoWrap" style="display:none;">
+          <video id="qrVideo" playsinline></video>
+        </div>
+        <button class="btn btn-primary" id="qrStartBtn" onclick="startQrScan()">📷 Start camera scan</button>
+        <button class="btn btn-ghost" id="qrStopBtn" onclick="stopQrScan()" style="display:none;">Stop scanning</button>
+        <label class="btn btn-ghost" style="display:block;text-align:center;cursor:pointer;margin-top:8px;">
+          🖼️ Scan from a photo instead
+          <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="scanQrPhoto(event)">
+        </label>
+        <div class="hint">If the camera doesn't catch it: ask the office to turn the screen brightness up, hold the phone 20–30 cm away, or take a photo of the code.</div>
+        <div class="error" id="qrScanError"></div>
+        <div id="qrScanResult" style="display:none;margin-top:12px;" class="genuine-box"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SET LOCATION ============ -->
+  <section class="panel" id="setloc">
+    <div class="grid">
+      <div class="card">
+        <h2>Set / pin a booking's location</h2>
+        <label for="setLocInput">Mobile number</label>
+        <input type="text" id="setLocInput" maxlength="10" placeholder="e.g. 9876543210" inputmode="numeric">
+        <button class="btn btn-primary" onclick="loadForSetLocation()">Load consumer details</button>
+        <div class="error" id="setLocError"></div>
+
+        <div id="setLocDetails" style="display:none;margin-top:14px;">
+          <h3>Selected</h3>
+          <div class="consumer-row"><span>Name</span><span id="sl_name"></span></div>
+          <div class="consumer-row"><span>Current pin</span><span id="sl_coords"></span></div>
+          <div class="consumer-row"><span>Saved address</span><span id="sl_known"></span></div>
+          <button class="btn btn-ghost" onclick="useMyLocation()">Use my current location</button>
+          <div class="hint">Click anywhere on the map to drop the pin manually, then tap Save below the map.</div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Map — click to set pin</h2>
+        <div class="map map-tall" id="setMap"></div>
+        <div class="hint" id="sl_dirtyHint" style="display:none;margin-top:10px;">Pin moved — tap Save to confirm this location.</div>
+        <button class="btn btn-primary" id="saveLocBtn" onclick="saveSetLocation()">💾 Save location</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONSUMER LINK SIMULATOR ============ -->
+  <section class="panel" id="consumer">
+    <div class="consumer-link-frame">
+      <div class="card">
+        <h2>Find consumer & send link</h2>
+        <p class="small">Look up a consumer, then send them the tracking link on their own WhatsApp — it opens your WhatsApp app with their number and a prefilled, personalized message ready to go.</p>
+        <label for="consumerTokenInput">Mobile number</label>
+        <input type="text" id="consumerTokenInput" maxlength="10" placeholder="e.g. 9876543210" inputmode="numeric">
+        <button class="btn btn-primary" onclick="lookupForConsumerTab()">Find consumer</button>
+        <div class="error" id="clError"></div>
+
+        <div id="clNew" style="display:none;margin-top:14px;">
+          <div class="hint" style="margin-top:0;" id="clNewNote">No booking for this number yet. Type the customer's name and add them.</div>
+          <label for="clNewName" style="margin-top:10px;">Customer name</label>
+          <input type="text" id="clNewName" maxlength="60" placeholder="e.g. Ramesh Patil" autocomplete="off">
+          <button class="btn btn-primary" onclick="addFromConsumerTab()">➕ Add customer</button>
+        </div>
+
+        <div id="clDetails" style="display:none;margin-top:14px;">
+          <div class="consumer-row"><span>Mobile No.</span><span id="cl_no"></span></div>
+          <div class="consumer-row"><span>Name</span><span id="cl_name"></span></div>
+          <div id="clNameFix" style="display:none;margin:8px 0;">
+            <label for="clFixName">Customer name</label>
+            <div style="display:flex;gap:8px;">
+              <input type="text" id="clFixName" maxlength="60" placeholder="e.g. Ramesh Patil" autocomplete="off" style="flex:1;">
+              <button class="btn btn-ghost" style="width:auto;margin:0;" onclick="saveNameFromConsumerTab()">💾 Save</button>
+            </div>
+          </div>
+          <div class="consumer-row" id="clAddrRow" style="display:none;"><span>Address</span><span id="cl_addr"></span></div>
+          <div class="consumer-row" id="clDealerRow" style="display:none;"><span>Dealer</span><span id="cl_dealer"></span></div>
+          <div class="consumer-row"><span>Booking</span><span id="cl_phone"></span></div>
+          <div class="hint" id="clSavedNote" style="display:none;">✅ Saved customer — tap Send link. The booking is added by itself.</div>
+          <button class="btn btn-wa" onclick="sendLinkFromConsumerTab()">📲 Send link via WhatsApp</button>
+          <button class="btn btn-ghost" onclick="previewWaMessage()">👁 Preview message</button>
+          <div class="waEditor" id="clWaPreview" style="display:none;" data-noi18n></div>
+        </div>
+      </div>
+
+      <div class="card" id="mmCard" style="display:none;">
+        <h2>📵 Missing mobile number</h2>
+        <p class="small">Customers the office has without a mobile number. When you meet one, ask for their number, type it and press 💾 Save — they become a normal customer straight away.</p>
+        <button class="btn btn-ghost" id="mmOpenBtn" onclick="openMissingList()">📵 Show missing list</button>
+        <div id="mmBox" style="display:none;">
+          <label for="mmSearch">Find</label>
+          <input type="text" id="mmSearch" placeholder="Name or address" autocomplete="off" oninput="mmOffset=0;loadMissingPhone(300)">
+          <label for="mmDealer">Dealership</label>
+          <select id="mmDealer" style="width:100%;padding:10px;border-radius:10px;" onchange="mmOffset=0;loadMissingPhone(0)"><option value="__all">All dealerships</option></select>
+          <div class="hint" id="mmShowing"></div>
+          <div id="mmList"></div>
+          <div id="mmPager" style="display:flex;gap:8px;"></div>
+        </div>
+      </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LIVE TRACKING ============ -->
+  <section class="panel" id="live">
+    <div class="grid">
+      <div class="card">
+        <h2>Today's map</h2>
+        <div class="map map-tall" id="liveMap"></div>
+        <div class="legend">
+          <span><i style="background:#e08a00;"></i>Waiting for location</span>
+          <span><i style="background:#0a6cff;"></i>Location shared</span>
+          <span><i style="background:#1caa5c;">✓</i>Delivered</span>
+        </div>
+        <button class="btn btn-ghost" id="centerMeBtn" onclick="centerOnMe()" style="margin-top:10px;">🔵 Center on my location</button>
+        <div class="error" id="liveGeoError"></div>
+        <div class="hint" id="liveGeoHint">The blue dot is you, updating as you move. Tap any pin for its details.</div>
+      </div>
+
+
+      <div class="card">
+        <h2><span class="pulse" style="margin-right:8px;"></span>Booking details</h2>
+        <div id="liveList"></div>
+      </div>
+    </div>
+  </section>
+
+
+</main>
+
+<div class="toast" id="toast"></div>
+<div class="undo-bar" id="undoBar"><span id="undoText"></span><button onclick="undoRouteDelivered()">Undo</button></div>
+
+<script>
+/* ---------------- build marker ----------------
+   Shown on the Dashboard so there is never any doubt about which version a
+   phone is actually running. If this doesn't match the latest, the device is
+   on a stale copy and needs a proper reload. */
+const BUILD = 'Build 58 \u00b7 17 Oct 2026';
+window.addEventListener('load', ()=>{
+  const el = document.getElementById('buildTag');
+  if(el) el.textContent = BUILD;
+});
+
+/* ---------------- login (delivery man's own mobile number) ---------------- */
+const LOGIN_KEY = 'lmbg_delivery_login_phone_v1';
+// Online database (see "Online database" further down)
+const STAFF_KEY_STORE = 'lmbg_staff_key_v1';
+const TOKENS_STORE = 'lmbg_link_tokens_v1';
+const LOC_SEEN_STORE = 'lmbg_loc_seen_v1';
+const LOGIN_NAME_KEY = 'lmbg_delivery_login_name_v1';
+const LOGIN_AT_KEY = 'lmbg_delivery_login_at_v1'; // when he logged in on this phone
+
+// Every name ever typed on this phone, kept against its mobile number. Logging
+// out never clears it, so a delivery man types his name once in his life on
+// this phone — after that, typing his number fills the name in by itself.
+const KNOWN_NAMES_KEY = 'lmbg_delivery_known_names_v1';
+
+function getKnownNames(){
+  try{ const m = JSON.parse(localStorage.getItem(KNOWN_NAMES_KEY)); return (m && typeof m === 'object') ? m : {}; }
+  catch(e){ return {}; }
+}
+function rememberName(phone, name){
+  const m = getKnownNames(); m[phone] = name;
+  try{ localStorage.setItem(KNOWN_NAMES_KEY, JSON.stringify(m)); }catch(e){}
+}
+// A name for this number from anywhere we have one: this phone's memory, or a
+// proper name already in the team list.
+function knownNameFor(phone){
+  if(!phone) return '';
+  const m = getKnownNames();
+  if(m[phone]) return m[phone];
+  try{
+    const team = JSON.parse(localStorage.getItem('lmbg_team_roster_v1'));
+    const t = Array.isArray(team) && team.find(x => x.phone === phone);
+    if(t && t.name && !/^You \(|^\+91/.test(t.name)) return t.name;
+  }catch(e){}
+  return '';
+}
+function getLoggedInName(){
+  try{ return localStorage.getItem(LOGIN_NAME_KEY) || ''; }catch(e){ return ''; }
+}
+
+function getLoggedInPhone(){
+  try{ return localStorage.getItem(LOGIN_KEY); }catch(e){ return null; }
+}
+function formatPhoneDisplay(full){
+  // full is stored as "91XXXXXXXXXX" — show as "+91 XXXXX XXXXX"
+  if(!full || full.length < 12) return full || '';
+  return '+91 ' + full.slice(2,7) + ' ' + full.slice(7);
+}
+function login(){
+  const name = document.getElementById('loginNameInput').value.replace(/\s+/g,' ').trim();
+  const raw = document.getElementById('loginPhoneInput').value.trim();
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  if(name.length < 2){ errEl.textContent = 'Enter your name.'; document.getElementById('loginNameInput').focus(); return; }
+  if(!/^\d{10}$/.test(raw)){ errEl.textContent = 'Enter a valid 10-digit mobile number.'; return; }
+  localStorage.setItem(LOGIN_NAME_KEY, name);
+  localStorage.setItem(LOGIN_KEY, '91'+raw);
+  localStorage.setItem(LOGIN_AT_KEY, String(Date.now()));
+  rememberName('91'+raw, name);
+  showApp();
+  toast('Logged in as '+name);
+}
+function showLogoutConfirm(){
+  if(confirm('Log out and switch to a different name or mobile number?')){
+    const me = getLoggedInPhone();
+    try{ if(me && onlinePossible()) staffApi('/api/team/' + me + '/bye', {method:'POST', body:{}}).catch(()=>{}); }catch(e){}
+    localStorage.removeItem(LOGIN_KEY); // the name stays remembered for next time
+    clearSyncedBookings();
+    showLogin();
+  }
+}
+function showApp(){
+  document.getElementById('loginScreen').classList.add('hidden');
+  const phone = getLoggedInPhone();
+  const whoBtn = document.getElementById('whoBtn');
+  if(phone){
+    whoBtn.style.display = 'inline-block';
+    whoBtn.textContent = '👤 ' + (getLoggedInName() || formatPhoneDisplay(phone));
+  }
+  heartbeat();
+  if(typeof syncWithOffice === 'function') setTimeout(syncWithOffice, 300);
+}
+function showLogin(){
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('whoBtn').style.display = 'none';
+  // Someone logged in before names were asked for keeps his number filled in,
+  // so he only has to type his name.
+  const phone = getLoggedInPhone();
+  const input = document.getElementById('loginPhoneInput');
+  if(input) input.value = phone ? phone.slice(2) : '';
+  const nameInput = document.getElementById('loginNameInput');
+  if(nameInput){
+    nameInput.value = knownNameFor(phone) || getLoggedInName();
+    // Only put the cursor in the name box if it is actually empty.
+    setTimeout(()=>(nameInput.value ? input : nameInput).focus(), 50);
+  }
+}
+
+/* ---------------- delivery team presence (silent — viewed in the admin app) ---------------- */
+// This app only *reports* that this device is active; the "Delivery team" list
+// itself is shown in the admin app, not here. Shares TEAM_KEY via localStorage
+// so the admin app (opened from the same origin) can read it.
+const TEAM_KEY = 'lmbg_team_roster_v1';
+
+// Demo delivery men older builds filled in — dropped (number AND name must match).
+const DEMO_TEAM = {'919820011122':'Suresh Kadam', '919820033344':'Vikram Chavan', '919820055566':'Ajay More'};
+function getTeam(){
+  try{
+    const parsed = JSON.parse(localStorage.getItem(TEAM_KEY));
+    if(Array.isArray(parsed)) return parsed.filter(m => DEMO_TEAM[m.phone] !== m.name);
+  }catch(e){}
+  return [];
+}
+function saveTeam(list){
+  try{ localStorage.setItem(TEAM_KEY, JSON.stringify(list)); }catch(e){}
+}
+// Marks the currently logged-in phone as active right now — called on login/app
+// open and on an interval while the app is in the foreground.
+function heartbeat(){
+  const phone = getLoggedInPhone();
+  if(!phone) return;
+  const list = getTeam();
+  const name = getLoggedInName() || formatPhoneDisplay(phone);
+  const me = list.find(m=>m.phone===phone);
+  if(me){ me.lastActive = Date.now(); me.name = name; } // keeps the admin view up to date if he changes his name
+  else{ list.push({phone, name, lastActive: Date.now()}); }
+  saveTeam(list);
+  // Tell the office too, so this phone shows on its Delivery status screen.
+  if(typeof onlinePossible === 'function' && onlinePossible()){
+    let loginAt = +localStorage.getItem(LOGIN_AT_KEY) || 0;
+    if(!loginAt){ loginAt = Date.now(); localStorage.setItem(LOGIN_AT_KEY, String(loginAt)); }
+    staffApi('/api/team', {method:'POST', body:{phone, name, loginAt}})
+      .then(r => checkOfficeLogout(r.logoutAt)).catch(()=>{});
+  }
+}
+
+
+/* ---------------- Saved addresses ----------------
+   The point of this: an LPG customer is the same flat month after month. Pin
+   it once and the next booking for that mobile already knows where to go, so
+   nobody has to ask the customer again or phone for directions.
+
+   Kept separately from bookings, because bookings come and go every month
+   while the doorstep does not. Over a few rounds this quietly becomes the most
+   valuable thing in the app — a map of every customer you serve — and it costs
+   nothing and needs no cooperation from the customer. */
+const BOOK_KEY = 'lmbg_address_book_v1';
+
+function getBook(){
+  try{
+    const p = JSON.parse(localStorage.getItem(BOOK_KEY));
+    return (p && typeof p === 'object' && !Array.isArray(p)) ? p : {};
+  }catch(e){ return {}; }
+}
+function saveBook(b){
+  try{ localStorage.setItem(BOOK_KEY, JSON.stringify(b)); }catch(e){}
+}
+function rememberAddress(no, lat, lng, extra){
+  if(!no || typeof lat !== 'number' || typeof lng !== 'number') return;
+  const b = getBook();
+  b[no] = Object.assign({lat, lng, savedAt: Date.now()}, b[no] && {firstSaved: b[no].firstSaved || b[no].savedAt}, extra || {});
+  if(!b[no].firstSaved) b[no].firstSaved = b[no].savedAt;
+  saveBook(b);
+  renderDashboardStats();
+}
+function knownAddress(no){
+  const b = getBook();
+  return b[no] || null;
+}
+function forgetAddress(no){
+  const b = getBook();
+  delete b[no];
+  saveBook(b);
+}
+
+function bookAgeText(entry){
+  if(!entry || !entry.firstSaved) return '';
+  const days = Math.floor((Date.now() - entry.firstSaved) / 86400000);
+  if(days < 1) return 'pinned today';
+  if(days === 1) return 'pinned yesterday';
+  if(days < 30) return 'pinned ' + days + ' days ago';
+  return 'pinned ' + Math.round(days / 30) + ' month' + (Math.round(days/30) === 1 ? '' : 's') + ' ago';
+}
+
+// ---- moving the book between phones, since there's no shared database yet ----
+function exportAddressBook(){
+  const b = getBook();
+  const keys = Object.keys(b);
+  if(!keys.length){ toast('No saved addresses yet'); return; }
+  const rows = [['Mobile Number','Latitude','Longitude','First pinned','Last updated']];
+  keys.forEach(no => rows.push([
+    no, b[no].lat, b[no].lng,
+    new Date(b[no].firstSaved || b[no].savedAt).toLocaleDateString(),
+    new Date(b[no].savedAt).toLocaleDateString()
+  ]));
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:16},{wch:12},{wch:12},{wch:14},{wch:14}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Addresses');
+  XLSX.writeFile(wb, 'gasdost_saved_addresses.xlsx');
+  toast('Exported ' + keys.length + ' saved addresses');
+}
+
+function importAddressBook(evt){
+  const file = evt.target.files && evt.target.files[0];
+  const errEl = document.getElementById('bookError');
+  errEl.textContent = '';
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, blankrows:false}).slice(1);
+      const b = getBook();
+      let added = 0, skipped = 0;
+      rows.forEach(r => {
+        const no = String(r[0] == null ? '' : r[0]).replace(/\D/g,'');
+        const lat = parseFloat(r[1]), lng = parseFloat(r[2]);
+        if(!isValidMobileNo(no) || isNaN(lat) || isNaN(lng)){ skipped++; return; }
+        // keep whichever pin is newer rather than blindly overwriting
+        if(b[no] && b[no].savedAt > Date.now() - 1) { skipped++; return; }
+        b[no] = {lat, lng, savedAt: Date.now(), firstSaved: (b[no] && b[no].firstSaved) || Date.now()};
+        added++;
+      });
+      saveBook(b);
+      applyBookToBookings();
+      errEl.textContent = '';
+      toast('Imported ' + added + ' address' + (added === 1 ? '' : 'es') + (skipped ? ', skipped ' + skipped : ''));
+    }catch(err){
+      errEl.textContent = 'Could not read that file — use one exported from this app.';
+    }finally{
+      evt.target.value = '';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// Drops saved pins onto any booking still sitting on the depot default.
+function applyBookToBookings(){
+  const list = getConsumers();
+  let touched = 0;
+  list.forEach(c => {
+    if(c.status === 'delivered') return;
+    const k = knownAddress(c.no);
+    if(k && (c.status === 'waiting' || !c.updated)){
+      c.lat = k.lat; c.lng = k.lng; c.status = 'shared'; c.updated = k.savedAt;
+      touched++;
+    }
+  });
+  if(touched){ saveStore(list); afterBookingsChanged(); }
+  return touched;
+}
+
+/* ---------------- mock data store ---------------- */
+const STORE_KEY = 'lmbg_store_v1'; // bumped so existing devices reseed with the new per-delivery-man assignment fields
+let DEPOT = [19.2183, 72.9781]; // fallback center (Thane) until we get a real GPS fix
+const GEO_ANCHOR_KEY = 'lmbg_geo_anchored_v1';
+
+// Consumer details plus their offset (in degrees) from DEPOT — this keeps the
+// same realistic spread of bookings, but lets the whole set be re-centered
+// on wherever the device actually is, instead of always sitting over Delhi.
+// `assign` is the phone of the delivery man this booking is on — it matches the
+// team roster in TEAM_KEY so the admin app can group delivery status per person.
+// `no` is the customer's 10-digit mobile number — it's the identifier the whole
+// app looks bookings up by. `phone` for WhatsApp is derived from it.
+const CONSUMER_TEMPLATE = [
+  {no:'9810012345', name:'Anita Sharma',  address:'C-12, Naupada',       booking:'BK-30051', status:'waiting',   dLat:-0.0461, dLng: 0.0341, agoMin:null, assign:'919820011122'},
+  {no:'9810023456', name:'Ravi Kumar',    address:'45, Ghodbunder Road', booking:'BK-30052', status:'waiting',   dLat: 0.0967, dLng:-0.0917, agoMin:null, assign:'919820011122'},
+  {no:'9810034567', name:'Farida Khan',   address:'B-7, Vartak Nagar',   booking:'BK-30053', status:'shared',    dLat:-0.0329, dLng: 0.0320, agoMin:6,    assign:'919820033344'},
+  {no:'9810045678', name:'Suresh Iyer',   address:'22, Manpada',         booking:'BK-30054', status:'delivered', dLat:-0.0865, dLng: 0.0010, agoMin:35,   assign:'919820033344'},
+  {no:'9810056789', name:'Priya Nair',    address:'8, Wagle Estate',     booking:'BK-30055', status:'shared',    dLat:-0.0219, dLng:-0.1630, agoMin:2,    assign:'919820055566'},
+  {no:'9810067890', name:'Mohan Desai',   address:'19, Kopri Colony',    booking:'BK-30056', status:'delivered', dLat: 0.0142, dLng: 0.0488, agoMin:80,   assign:'919820055566'},
+];
+
+function buildConsumers(center){
+  return CONSUMER_TEMPLATE.map(t => {
+    const updated = t.agoMin ? Date.now() - t.agoMin*60000 : null;
+    return {
+      no:t.no, name:t.name, phone:'91'+t.no, address:t.address, booking:t.booking, status:t.status,
+      lat: center[0] + t.dLat, lng: center[1] + t.dLng,
+      updated,
+      assignedTo: t.assign || null,
+      deliveredBy: t.status === 'delivered' ? (t.assign || null) : null,
+      deliveredAt: t.status === 'delivered' ? updated : null
+    };
+  });
+}
+
+const DEMO_NUMBERS = new Set(CONSUMER_TEMPLATE.map(t => t.no));
+function isDemo(c){ return DEMO_NUMBERS.has(c.no); }
+
+function loadStore(){
+  try{
+    const parsed = JSON.parse(localStorage.getItem(STORE_KEY));
+    if(Array.isArray(parsed)){
+      // Clear out demo bookings older builds put in (number AND name must match).
+      const real = parsed.filter(c => !(isDemo(c) && CONSUMER_TEMPLATE.some(t => t.no === c.no && t.name === c.name)));
+      if(real.length !== parsed.length) saveStore(real);
+      return real;
+    }
+  }catch(e){}
+  // Start empty — no demo bookings any more.
+  saveStore([]); return [];
+  const seeded = buildConsumers(DEPOT);
+  saveStore(seeded);
+  return seeded;
+}
+
+// Ask the browser for the device's real position and move every booking to
+// sit around it, so the map shows bookings near where the phone actually is.
+function anchorToCurrentLocation(){
+  return; // only ever moved the demo bookings, which are gone
+  if(localStorage.getItem(GEO_ANCHOR_KEY)) return; // already anchored once — don't keep moving pins
+  if(onlinePossible()) return; // real bookings — never replace them with demo ones
+  if(!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const center = [pos.coords.latitude, pos.coords.longitude];
+    DEPOT = center;
+    saveStore(buildConsumers(center));
+    localStorage.setItem(GEO_ANCHOR_KEY, '1');
+    refreshMapsAfterAnchor();
+    toast('Bookings centered on your current location');
+  }, ()=>{ /* permission denied / unavailable — keep the Delhi fallback silently */ },
+  {enableHighAccuracy:true, timeout:8000});
+}
+function refreshMapsAfterAnchor(){
+  if(liveMap){ liveMap.setView(DEPOT, 13); renderLive(); }
+  if(setMap && setConsumer){ const fresh = findConsumer(setConsumer.no); if(fresh){ setConsumer = fresh; placeSetPin(fresh.lat, fresh.lng); setMap.setView([fresh.lat, fresh.lng], 14); } }
+  renderDashboardStats();
+  refreshRouteIfPlanned();
+}
+function saveStoreRaw(data){ localStorage.setItem(STORE_KEY, JSON.stringify(data)); }
+// Every booking change on this phone comes through here, so this is where
+// the changes are noted for sending to the office.
+function saveStore(data){
+  saveStoreRaw(data);
+  if(typeof queueChanges === 'function') queueChanges(data);
+}
+function getConsumers(){ return loadStore(); }
+function findConsumer(no){ return getConsumers().find(c => c.no === no); }
+// One mobile can be a customer of several dealerships: keys are the mobile,
+// or mobile-2, mobile-3 … The phone number is always the first 10 digits.
+const mob = k => String(k || '').slice(0, 10);
+function findConsumers(mobile){ return getConsumers().filter(c => mob(c.no) === mobile); }
+// What to show for a booking's number (adds the dealership when it matters).
+function showNo(c){ return mob(c.no) + (String(c.no).length > 10 && c.dealer ? ' · ' + c.dealer : ''); }
+// Buttons to pick which dealership a number is meant for.
+function connectionButtons(list, fn){
+  return '<div class="hint" style="margin:8px 0 4px;color:var(--text);">🏪 This number is a customer of <b>' + list.length + ' dealerships</b> — tap one:</div>' +
+    list.map(c => `<button class="btn btn-ghost" style="margin:4px 0;text-align:left;" onclick="${fn}('${c.no}')">🏪 <b>${escapeHtml(c.dealer || 'No dealership')}</b> · ${escapeHtml(c.name && c.name !== 'New Customer' ? c.name : '')}${c.booked ? ' · ✅ booked' : ''}</button>`).join('');
+}
+function updateConsumer(no, patch){
+  const list = getConsumers();
+  const idx = list.findIndex(c=>c.no===no);
+  if(idx>-1){ list[idx] = {...list[idx], ...patch}; saveStore(list); }
+  syncViewsForConsumer(no);
+  return list[idx];
+}
+
+// Whenever a booking changes (location set/shared, or marked delivered),
+// immediately refresh any panel currently showing that consumer — so nothing
+// shows a stale snapshot from before the change.
+function syncViewsForConsumer(no){
+  const fresh = findConsumer(no);
+  if(!fresh) return;
+  refreshRouteIfPlanned();
+  if(setConsumer && setConsumer.no === no && setMap){ setConsumer = fresh; placeSetPin(fresh.lat, fresh.lng); }
+  if(liveMap){ renderLive(); }
+  renderDashboardStats();
+}
+
+// Mark a booking delivered — reachable from the Live Map list. Records who
+// actually delivered it (this phone's logged-in number) so the admin app can
+// count deliveries per delivery man, even for bookings nobody was assigned.
+function markDelivered(no){
+  const c = findConsumer(no);
+  if(!c) return;
+  const me = getLoggedInPhone() || null;
+  updateConsumer(no, {
+    status:'delivered', updated: Date.now(),
+    deliveredBy: me, deliveredAt: Date.now(),
+    assignedTo: c.assignedTo || me // an unassigned booking counts toward whoever completed it
+  });
+  toast('Marked delivered for '+c.name);
+}
+
+// Delivered straight from the Route list: marked at once, with 5 seconds to undo.
+let undoDelivered = null;
+function routeDelivered(no){
+  const c = findConsumer(no);
+  if(!c || c.status === 'delivered') return;
+  const before = {status: c.status, updated: c.updated, deliveredBy: c.deliveredBy || null, deliveredAt: c.deliveredAt || null, assignedTo: c.assignedTo || null};
+  markDelivered(no);
+  document.getElementById('toast').classList.remove('show');
+  clearTimeout(undoDelivered && undoDelivered.t);
+  undoDelivered = {no, before, t: setTimeout(hideUndoBar, 5000)};
+  document.getElementById('undoText').textContent = 'Delivered ✓ ' + (c.name || mob(no));
+  document.getElementById('undoBar').classList.add('show');
+}
+function hideUndoBar(){
+  document.getElementById('undoBar').classList.remove('show');
+  undoDelivered = null;
+}
+function undoRouteDelivered(){
+  if(!undoDelivered) return;
+  const {no, before} = undoDelivered;
+  clearTimeout(undoDelivered.t);
+  hideUndoBar();
+  updateConsumer(no, Object.assign({}, before, {updated: Date.now()}));
+  if(!routeStops.length) refreshRouteIfPlanned();
+  const err = document.getElementById('routeError'); if(err && routeStops.length) err.textContent = '';
+  toast('Undone — back on the route');
+}
+
+// The office (admin app) writes here whenever it uploads a batch, so the
+// delivery man can see new bookings arrived without being told.
+const LAST_UPLOAD_KEY = 'lmbg_last_office_upload_v1';
+const UPLOAD_NOTE_MAX_AGE = 12 * 60 * 60 * 1000; // stop showing yesterday's upload
+
+function renderUploadNote(){
+  const el = document.getElementById('uploadNote');
+  if(!el) return;
+  let last = null;
+  try{
+    const raw = localStorage.getItem(LAST_UPLOAD_KEY);
+    if(raw) last = JSON.parse(raw);
+  }catch(e){}
+  if(!last || !last.count || (Date.now() - last.at) > UPLOAD_NOTE_MAX_AGE){
+    el.style.display = 'none';
+    return;
+  }
+  const mins = Math.round((Date.now() - last.at)/60000);
+  const ago = mins < 1 ? 'just now' : mins < 60 ? mins+' min ago' : Math.round(mins/60)+' hr ago';
+  el.style.display = 'flex';
+  el.innerHTML = `📥 Office uploaded <b>${last.count}</b> new booking${last.count===1?'':'s'} · ${ago}`;
+}
+
+// Every path that changes the booking list ends here, so no view is ever left
+// showing yesterday's picture. Adding this was cheaper than remembering to
+// update three render calls in five different places.
+function afterBookingsChanged(){
+  renderLive();
+  renderDashboardStats();
+  refreshRouteIfPlanned();
+}
+
+// Tapping Total / Pending / Delivered shows those bookings under the tiles.
+let statView = null;
+function showStatList(view){
+  statView = statView === view ? null : view; // tap the same tile again to close
+  document.querySelectorAll('[data-stat]').forEach(t => t.classList.toggle('stat-on', t.dataset.stat === statView));
+  renderStatList();
+}
+function renderStatList(){
+  const box = document.getElementById('statList');
+  if(!box) return;
+  if(!statView){ box.style.display = 'none'; return; }
+  const list = getConsumers().filter(c => statView === 'all' ? true
+    : statView === 'delivered' ? c.status === 'delivered' : c.status !== 'delivered');
+  list.sort((a, b) => (a.status === 'delivered') - (b.status === 'delivered'));
+  box.style.display = 'block';
+  if(!list.length){ box.innerHTML = '<div class="hint">No bookings here.</div>'; return; }
+  box.innerHTML = list.map(c => {
+    const done = c.status === 'delivered';
+    const badge = done ? '<span class="sl-badge sl-done">✅ Delivered</span>'
+      : c.status === 'shared' ? '<span class="sl-badge sl-live">📍 Location shared</span>'
+      : '<span class="sl-badge sl-wait">⏳ Waiting for location</span>';
+    const name = (!c.name || c.name === 'New Customer') ? c.no : c.name;
+    const addr = (c.address && c.address !== 'Address pending') ? c.address : '';
+    return `<div class="sl-row">
+      <div class="sl-top"><b>${escapeHtml(name)}</b>${badge}</div>
+      <div class="sl-sub">📞 ${escapeHtml(showNo(c))}${addr ? ' · ' + escapeHtml(addr) : ''}</div>
+      ${done ? '' : `<div class="sl-acts">
+        <button class="btn btn-ghost" onclick="navigateTo('${c.no}')">🧭 Navigate</button>
+        <button class="btn btn-primary" style="background:var(--green);" onclick="markDelivered('${c.no}')">✅ Delivered</button>
+      </div>
+      ${onlinePossible() ? `<div class="sl-acts"><button class="btn btn-ghost" onclick="openPassOn('${c.no}')">↪ Give to someone else</button></div>
+      <div class="po-box" id="po_${c.no}" style="display:none;"></div>` : ''}`}
+    </div>`;
+  }).join('');
+}
+
+/* ---- Give a booking to a colleague, or back to the office ---- */
+let teamCache = null;
+async function openPassOn(no){
+  const box = document.getElementById('po_' + no);
+  if(!box) return;
+  if(box.style.display === 'flex'){ box.style.display = 'none'; return; }
+  box.style.display = 'flex';
+  box.innerHTML = '<div class="hint">Loading…</div>';
+  try{
+    if(!teamCache){ const d = await staffApi('/api/team'); teamCache = d.team || []; setTimeout(() => { teamCache = null; }, 120000); }
+  }catch(e){ box.innerHTML = '<div class="hint">No internet. Try again when online.</div>'; return; }
+  const me = getLoggedInPhone();
+  const others = teamCache.filter(t => t.phone !== me);
+  box.innerHTML = `<button class="btn po-office" onclick="passOn('${no}','office')">🏢 Return to office</button>` +
+    others.map(t => `<button class="btn btn-ghost po-man" onclick="passOn('${no}','${t.phone}')">👤 ${escapeHtml(t.name || t.phone.slice(2))} <span class="po-no">${t.phone.slice(2)}</span></button>`).join('') +
+    `<button class="btn btn-ghost" onclick="openPassOn('${no}')">✖ Keep it</button>`;
+}
+function passOn(no, to){
+  const list = getConsumers();
+  const idx = list.findIndex(c => c.no === no);
+  if(idx < 0) return;
+  const c = list[idx];
+  // Off this phone without it counting as a cancel; the office moves it on.
+  list.splice(idx, 1);
+  applyingRemote = true;
+  try{ saveStoreRaw(list); } finally { applyingRemote = false; }
+  const snap = readJSON(SYNC_SNAP_STORE, {}) || {};
+  delete snap[no]; writeJSON(SYNC_SNAP_STORE, snap);
+  writeJSON(SYNC_OUTBOX_STORE, readJSON(SYNC_OUTBOX_STORE, []).concat([{kind:'op', op:{op:'assign', no, to}}]));
+  afterBookingsChanged();
+  const who = to === 'office' ? 'the office' : ((teamCache || []).find(t => t.phone === to) || {}).name || to.slice(2);
+  toast('↪ ' + ((c.name && c.name !== 'New Customer') ? c.name : no) + ' → ' + who);
+  syncWithOffice();
+}
+function escapeHtml(v){ return String(v == null ? '' : v).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+function renderDashboardStats(){
+  renderStatList();
+  const totalEl = document.getElementById('stat_total');
+  if(!totalEl) return; // dashboard not in the DOM yet
+  const list = getConsumers();
+  const delivered = list.filter(c=>c.status==='delivered').length;
+  const total = list.length;
+  document.getElementById('stat_total').textContent = total;
+  document.getElementById('stat_pending').textContent = total - delivered;
+  document.getElementById('stat_delivered').textContent = delivered;
+
+  renderNextCard();
+  try{ renderFind(); }catch(e){}
+  renderUploadNote();
+}
+
+/* Next delivery card: the nearest pending customer with big picture buttons,
+   so the whole day can be run from here — Go → Delivered → Go → Delivered. */
+let nextSkipped = new Set(), nextGpsAsked = 0;
+function nextStopList(){
+  const pending = getConsumers().filter(c => c.status !== 'delivered' && !isDemo(c));
+  const here = myLatLng || DEPOT;
+  const pinned = pending.filter(c => c.status === 'shared' && c.lat != null);
+  const unpinned = pending.filter(c => !(c.status === 'shared' && c.lat != null));
+  pinned.sort((a, b) => haversineKm(here, [a.lat, a.lng]) - haversineKm(here, [b.lat, b.lng]));
+  const all = pinned.concat(unpinned);
+  // Skipped ones go to the back of the line.
+  return all.filter(c => !nextSkipped.has(c.no)).concat(all.filter(c => nextSkipped.has(c.no)));
+}
+function renderNextCard(){
+  const body = document.getElementById('nextBody');
+  if(!body) return;
+  // Quietly refresh where he is (at most once a minute) so "nearest" stays true.
+  if(navigator.geolocation && Date.now() - nextGpsAsked > 60000){
+    nextGpsAsked = Date.now();
+    navigator.geolocation.getCurrentPosition(pos => {
+      const had = !!myLatLng;
+      myLatLng = [pos.coords.latitude, pos.coords.longitude];
+      if(!had) renderNextCard();
+    }, () => {}, {maximumAge: 60000, timeout: 10000});
+  }
+  const list = nextStopList();
+  const left = document.getElementById('nextLeft');
+  if(!list.length){
+    left.textContent = '';
+    const any = getConsumers().filter(c => !isDemo(c)).length;
+    body.innerHTML = any ? '<div class="next-done">🎉 All delivered</div>'
+                         : '<div class="next-addr" style="padding:10px 0;">No bookings yet.</div>';
+    return;
+  }
+  left.textContent = list.length + ' left';
+  const c = list[0];
+  const pinned = c.status === 'shared' && c.lat != null;
+  const addr = c.address && c.address !== 'Address pending' ? c.address : '';
+  const km = pinned ? haversineKm(myLatLng || DEPOT, [c.lat, c.lng]) : null;
+  body.innerHTML = `
+    <div class="next-name">${escapeHtml(c.name && c.name !== 'New Customer' ? c.name : mob(c.no))}</div>
+    ${addr ? `<div class="next-addr">${escapeHtml(addr)}</div>` : ''}
+    <div class="next-meta">📞 ${escapeHtml(showNo(c))}${km != null ? ' · ' + km.toFixed(1) + ' km' : ''}</div>
+    ${pinned ? '' : '<div class="next-meta" style="color:var(--amber);font-weight:700;">📍 Location not shared yet</div>'}
+    <div class="next-btns">
+      ${pinned ? `<button class="btn btn-primary" onclick="navigateTo('${c.no}')">🧭 Go</button>`
+               : `<button class="btn btn-wa" onclick="document.querySelector('[data-tab=consumer]').click();sendLinkToFilled('${mob(c.no)}')">📲 Link</button>`}
+      <a class="btn btn-call" href="tel:+91${mob(c.no)}">📞 Call</a>
+      <button class="btn btn-done" onclick="routeDelivered('${c.no}')">✅ Delivered</button>
+    </div>
+    ${list.length > 1 ? `<button class="next-skip" onclick="skipNext('${c.no}')">⏭ Next customer</button>` : ''}`;
+}
+// Find customer: today's bookings by name or a few digits of the number.
+function renderFind(){
+  const el = document.getElementById('findList');
+  if(!el) return;
+  const raw = (document.getElementById('findInput').value || '').trim().toLowerCase();
+  const digits = raw.replace(/\D/g, '');
+  if(raw.length < 2){ el.innerHTML = ''; return; }
+  const found = getConsumers().filter(c => !isDemo(c) &&
+    (digits.length >= 3 ? mob(c.no).includes(digits) : (c.name || '').toLowerCase().includes(raw)));
+  if(!found.length){ el.innerHTML = '<div class="next-meta" style="padding:10px 0;">No booking found.</div>'; return; }
+  el.innerHTML = found.slice(0, 5).map(c => {
+    const done = c.status === 'delivered';
+    const pinned = c.status === 'shared' && c.lat != null;
+    const addr = c.address && c.address !== 'Address pending' ? c.address : '';
+    return `<div style="border-top:1px solid var(--border);padding:12px 0 4px;margin-top:10px;">
+      <div style="font-size:18px;font-weight:800;">${escapeHtml(c.name && c.name !== 'New Customer' ? c.name : mob(c.no))}${done ? ' <span style="color:var(--green);font-size:14px;">✓ Delivered</span>' : ''}</div>
+      ${addr ? `<div class="next-addr" style="font-size:14px;">${escapeHtml(addr)}</div>` : ''}
+      <div class="next-meta">📞 ${escapeHtml(showNo(c))}${pinned || done ? '' : ' · <span style="color:var(--amber);font-weight:700;">📍 no location</span>'}</div>
+      <div class="next-btns" style="grid-template-columns:1fr${done ? '' : ' 1fr 1fr'};margin-top:8px;">
+        ${done ? '' : pinned ? `<button class="btn btn-primary" style="min-height:52px;font-size:16px;" onclick="navigateTo('${c.no}')">🧭 Go</button>`
+                 : `<button class="btn btn-wa" style="min-height:52px;font-size:16px;" onclick="document.querySelector('[data-tab=consumer]').click();sendLinkToFilled('${mob(c.no)}')">📲 Link</button>`}
+        <a class="btn btn-call" style="min-height:52px;font-size:16px;" href="tel:+91${mob(c.no)}">📞 Call</a>
+        ${done ? '' : `<button class="btn" style="min-height:52px;font-size:16px;background:var(--green);color:#fff;" onclick="routeDelivered('${c.no}');renderFind()">✅ Done</button>`}
+      </div>
+    </div>`;
+  }).join('') + (found.length > 5 ? `<div class="next-meta" style="margin-top:8px;">+${found.length - 5} more — type more letters</div>` : '');
+}
+function skipNext(no){
+  nextSkipped.add(no);
+  // Once everyone has been skipped, start the circle again.
+  const pending = getConsumers().filter(c => c.status !== 'delivered' && !isDemo(c));
+  if(pending.every(c => nextSkipped.has(c.no))) nextSkipped = new Set([no]);
+  renderNextCard();
+}
+
+function isValidMobileNo(v){ return /^[6-9]\d{9}$/.test(v); } // Indian mobiles start 6-9
+function isValidKey(v){ return /^[6-9]\d{9}(?:-\d{1,2})?$/.test(String(v || '')); }
+function fmtTime(ts){
+  if(!ts) return '— not shared yet —';
+  const d = new Date(ts);
+  const mins = Math.round((Date.now()-ts)/60000);
+  return mins < 1 ? 'just now' : (mins + ' min ago · ' + d.toLocaleTimeString());
+}
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+/* ---------------- tabs ---------------- */
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    if(btn.dataset.tab!=='addbooking') stopQrScan(); // don't leave the camera running when leaving the tab
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+    setTimeout(()=>{
+      if(btn.dataset.tab==='setloc' && setMap) setMap.invalidateSize();
+      if(btn.dataset.tab==='dashboard') renderDashboardStats();
+      if(btn.dataset.tab==='live') { liveMap.invalidateSize(); renderLive(); }
+      if(btn.dataset.tab==='live'){ refreshRouteIfPlanned(); }
+    }, 50);
+  });
+});
+
+/* ---------------- Tracking link ----------------
+   The link we send a customer has to be a public web address. If the app is
+   opened straight off this computer the address starts with file:// — which
+   means nothing on the customer's phone, and WhatsApp won't even make it
+   tappable. Once the app is deployed, paste its address between the quotes
+   below and every link will use it, wherever the app is opened from. */
+const PUBLIC_BASE_URL = ''; // e.g. 'https://lmbharatgas.netlify.app/lm_delivery_app.html'
+
+// True only when the link we'd send actually works on someone else's phone.
+function trackingLinkIsPublic(){
+  if(PUBLIC_BASE_URL) return true;
+  return location.protocol === 'http:' || location.protocol === 'https:';
+}
+
+// Builds the link the customer receives. It points at share_location.html —
+// a page that can ONLY set a location. The customer never reaches this app,
+// so they never see anyone else's bookings.
+//
+// Their own name and booking ride along in the link so the page can greet them
+// properly, which is what stops it looking like a scam. It all sits after the
+// '#', which browsers don't send to any server.
+function buildTrackingLink(c){
+  const no = typeof c === 'string' ? c : c.no;
+  const base = PUBLIC_BASE_URL || (location.origin + location.pathname);
+  const customerPage = base.replace(/[^/]*$/, '') + 'share_location.html';
+  const tok = getTokens()[no];
+  if(tok){
+    // Connected to the office: the link carries only a secret code, and the
+    // customer's answer is saved straight to the database.
+    const me0 = getLoggedInPhone();
+    // Short form (/l/<code>/<phone>) — opens the same page, easier to tap.
+    if(/^https?:/.test(customerPage)) return base.replace(/[^/]*$/, '') + 'l/' + tok + (me0 ? '/' + me0 : '');
+    return customerPage + '#t=' + tok + (me0 ? '&d=' + me0 : '');
+  }
+  const bits = ['c=' + encodeURIComponent(no)];
+  if(typeof c === 'object'){
+    if(c.name && c.name !== 'New Customer') bits.push('n=' + encodeURIComponent(c.name));
+    if(c.booking) bits.push('b=' + encodeURIComponent(c.booking));
+    if(c.address && c.address !== 'Address pending') bits.push('a=' + encodeURIComponent(c.address));
+    if(c.dealer) bits.push('g=' + encodeURIComponent(c.dealer));
+  }
+  const me = getLoggedInPhone();
+  if(me) bits.push('d=' + encodeURIComponent(me));
+  return customerPage + '#' + bits.join('&');
+}
+
+function buildWaMessage(c){
+  const link = buildTrackingLink(c);
+  const myPhone = getLoggedInPhone();
+  const myName = getLoggedInName();
+  const contactLine = myPhone ? `Your delivery partner: ${myName ? myName + ', ' : ''}${formatPhoneDisplay(myPhone)}\n\n` : '';
+  const named = c.name && c.name !== 'New Customer';
+  const hasAddr = c.address && c.address !== 'Address pending';
+  const details = (named ? `Name: ${c.name}\n` : '') +
+    `Mobile: +91 ${mob(c.no)}\n` +
+    (hasAddr ? `Address: ${c.address}\n` : '') +
+    (c.dealer ? `Dealer: ${c.dealer}\n` : '');
+  return `Hi${named ? ' '+c.name : ''}, this is ${c.dealer || 'GasDost'} Delivery.\n\n`+
+    `${details}\n`+
+    `To help our delivery partner reach you quickly, please share your live location here:\n${link}\n\n`+
+    contactLine+
+    `This link only asks for your location — nothing else. Thank you!`;
+}
+
+// Opens WhatsApp — on the device it's tapped from, using whichever WhatsApp
+// account is signed in there — addressed to the consumer's own number, with
+// their name and the tracking link prefilled in the message.
+function sendWhatsAppLink(c, previewElId){
+  const msg = buildWaMessage(c);
+  if(previewElId){
+    const el = document.getElementById(previewElId);
+    el.style.display = 'block';
+    el.textContent = msg;
+  }
+  // Catch the case where the link points at a file on this computer. Sending
+  // that to a customer looks broken and they can't do anything with it.
+  if(!trackingLinkIsPublic()){
+    const go = confirm(
+      'This app is running from a file on this computer, so the tracking link '+
+      'in the message will not work on the customer\u2019s phone \u2014 WhatsApp '+
+      'won\u2019t even make it tappable.\n\n'+
+      'Deploy the app and put its web address into PUBLIC_BASE_URL to fix this.\n\n'+
+      'Open WhatsApp anyway, just to test?');
+    if(!go){ toast('Not sent \u2014 deploy the app first'); return; }
+  }
+  const waUrl = `https://wa.me/${c.phone}?text=${encodeURIComponent(msg)}`;
+  window.open(waUrl, '_blank');
+  // Counted in the office's Location tracker (sent with the next sync).
+  try{ if(onlinePossible() && getLoggedInPhone()){
+    writeJSON(SYNC_OUTBOX_STORE, readJSON(SYNC_OUTBOX_STORE, []).concat([{kind:'op', op:{op:'linksent', no:c.no, at:Date.now()}}]));
+    clearTimeout(queueChanges._t); queueChanges._t = setTimeout(syncWithOffice, 800);
+  } }catch(e){}
+  toast('WhatsApp opened with prefilled message for '+c.name);
+}
+
+/* ---------------- Add Booking (manual + bulk QR) ---------------- */
+function switchAddSeg(seg){
+  document.querySelectorAll('.seg-btn').forEach(b=>b.classList.toggle('active', b.dataset.seg===seg));
+  document.querySelectorAll('.seg-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('seg-'+seg).classList.add('active');
+  if(seg!=='scan') stopQrScan(); // don't leave the camera running in the background
+}
+
+// Adds a brand-new placeholder booking from just a mobile number (manual entry).
+// Name/mobile/address are filled in later — via a bulk QR import, or once the
+// consumer shares their location.
+// Look a number up in the office's customer list, so the name and address
+// don't have to be typed. Returns null when unknown or offline.
+async function officeCustomer(no){
+  return (await officeCustomers(no))[0] || null;
+}
+// Every dealership this number is a customer of, in the office list.
+async function officeCustomers(no){
+  if(!onlinePossible()) return [];
+  try{
+    const d = await staffApi('/api/lookup', {method:'POST', body:{nos:[no]}});
+    return (d.customers || []).filter(c => mob(c.no) === mob(no) && (no.length === 10 || c.no === no));
+  }catch(e){ return []; }
+}
+async function manualNoTyped(){
+  const no = document.getElementById('manualNoInput').value.replace(/\D/g,'');
+  const found = document.getElementById('manualFound');
+  found.style.display = 'none';
+  manualKey = null;
+  if(!isValidMobileNo(no)) return;
+  const list = await officeCustomers(no);
+  if(document.getElementById('manualNoInput').value.replace(/\D/g,'') !== no) return;
+  if(list.length > 1){
+    manualChoices = list;
+    found.innerHTML = connectionButtons(list.map(c => Object.assign({}, c, {booked: !!findConsumer(c.no)})), 'pickManualConnection');
+    found.style.display = 'block';
+    return;
+  }
+  const c = list[0];
+  if(!c) return;
+  manualKey = c.no;
+  if(c.name) document.getElementById('manualNameInput').value = c.name;
+  if(c.address) document.getElementById('manualAddrInput').value = c.address;
+  if(c.name || c.address){ found.textContent = '✅ Saved customer found — details filled in.'; found.style.display = 'block'; }
+}
+
+let manualKey = null, manualChoices = [];
+function pickManualConnection(key){
+  const c = manualChoices.find(x => x.no === key);
+  if(!c) return;
+  manualKey = key;
+  document.getElementById('manualNameInput').value = c.name || '';
+  document.getElementById('manualAddrInput').value = c.address || '';
+  const found = document.getElementById('manualFound');
+  found.textContent = '✅ ' + (c.dealer || 'Saved customer') + ' — details filled in.';
+  found.style.display = 'block';
+}
+function addManualBooking(){
+  const val = document.getElementById('manualNoInput').value.trim();
+  const errEl = document.getElementById('manualAddError');
+  errEl.textContent = '';
+  if(!isValidMobileNo(val)){ errEl.textContent = 'Enter a valid 10-digit mobile number.'; return; }
+  if(manualChoices.length > 1 && mob(manualChoices[0].no) === val && !(manualKey && mob(manualKey) === val)){
+    errEl.textContent = 'This number is a customer of more than one dealership — tap the dealership above.'; return;
+  }
+  const key = manualKey && mob(manualKey) === val ? manualKey : val;
+  const list = getConsumers();
+  if(list.find(c=>c.no===key)){ errEl.textContent = 'A booking for this mobile number already exists.'; return; }
+  const name = document.getElementById('manualNameInput').value.replace(/\s+/g,' ').trim();
+  const addr = document.getElementById('manualAddrInput').value.replace(/\s+/g,' ').trim();
+  const pick = manualChoices.find(x => x.no === key);
+  addBookingRecord(list, {no: key, name, addr, dealer: pick ? pick.dealer : ''});
+  manualKey = null; manualChoices = [];
+  saveStore(list);
+  afterBookingsChanged();
+  ['manualNoInput','manualNameInput','manualAddrInput'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('manualFound').style.display = 'none';
+  toast('Booking added for consumer '+(name || val));
+}
+
+// ---- Bulk import via QR (payload generated by the admin/desktop app) ----
+const BULK_QR_TYPE = 'lmbg_bulk_v1';
+let qrScanner = null;
+
+// Codes from the office are either the short form
+//   GD2|<part>/<parts>|<mobile>~<name>~<booking>;…
+// or the older JSON form. Returns which part this was, for multi-code batches.
+function importBulkPayload(rawText){
+  const m2 = /^GD2\|(\d+)\/(\d+)\|(.*)$/s.exec(String(rawText || '').trim());
+  if(m2){
+    const list = getConsumers();
+    let added = 0, skipped = 0, total = 0;
+    m2[3].split(';').forEach(chunk => {
+      if(!chunk) return;
+      total++;
+      const [no, name, bk] = chunk.split('~');
+      // Address and dealer arrive from the office list on the next sync.
+      const key = String(no || '').trim();
+      const ok = addBookingRecord(list, {no: key, name: name || '', phone: '91' + mob(key),
+        addr: '', dealer: '', bookingId: bk || ''});
+      if(ok) added++; else skipped++;
+    });
+    saveStore(list);
+    afterBookingsChanged();
+    return {added, skipped, total, part: +m2[1], parts: +m2[2]};
+  }
+  let payload;
+  try{ payload = JSON.parse(rawText); }
+  catch(e){ throw new Error('That QR code isn’t booking data.'); }
+  if(!payload || payload.t !== BULK_QR_TYPE || !Array.isArray(payload.items)){
+    throw new Error('That QR code isn’t a bulk-booking code from the admin app.');
+  }
+  const list = getConsumers();
+  let added = 0, skipped = 0;
+  payload.items.forEach(it=>{
+    if(!it){ skipped++; return; }
+    const ok = addBookingRecord(list, {no: it.n, name: it.m, phone: it.p, addr: it.a, dealer: it.g, bookingId: it.b});
+    if(ok) added++; else skipped++;
+  });
+  saveStore(list);
+  afterBookingsChanged();
+  return {added, skipped, total: payload.items.length, part: 1, parts: 1};
+}
+
+// ---- Bulk import via Excel (no QR code — same template the office uses) ----
+const TEMPLATE_HEADERS = ['Mobile Number', 'Name', 'Booking ID (optional)'];
+
+function downloadTemplate(){
+  const rows = [TEMPLATE_HEADERS,
+    ['9876500001','Ramesh Patil',''],
+    ['9876500002','Sunita Joshi','']];
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:16},{wch:22},{wch:20}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Bookings');
+  XLSX.writeFile(wb, 'gasdost_booking_template.xlsx');
+  toast('Template downloaded');
+}
+
+// Shared by manual add, QR import and Excel import so duplicate/validation
+// rules only live in one place. Bookings are stamped with whoever's logged in
+// on this phone, so the admin app can break delivery status down per person.
+function addBookingRecord(list, {no, name, phone, addr, dealer, bookingId}){
+  if(!isValidKey(no) || list.find(c=>c.no===no)) return false;
+  // If this doorstep was pinned on an earlier round, start from it rather than
+  // dumping the booking on the depot and asking the customer all over again.
+  const known = knownAddress(no);
+  list.push({
+    no, name: name || 'New Customer', phone: phone || ('91'+mob(no)), address: addr || 'Address pending',
+    dealer: dealer || '',
+    booking: bookingId || ('BK-'+no),
+    status: known ? 'shared' : 'waiting',
+    lat: known ? known.lat : DEPOT[0],
+    lng: known ? known.lng : DEPOT[1],
+    updated: known ? known.savedAt : null,
+    fromBook: !!known,
+    assignedTo: getLoggedInPhone() || null, deliveredBy: null, deliveredAt: null
+  });
+  return true;
+}
+
+function handleBulkXlsxUpload(evt){
+  const file = evt.target.files && evt.target.files[0];
+  const errEl = document.getElementById('bulkXlsxError');
+  const sumEl = document.getElementById('bulkXlsxSummary');
+  errEl.textContent = '';
+  sumEl.style.display = 'none';
+  if(!file) return;
+  if(typeof XLSX === 'undefined'){ errEl.textContent = 'Excel support failed to load. Check your connection and try again.'; evt.target.value=''; return; }
+
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {header:1, blankrows:false});
+      const dataRows = rows.slice(1); // skip header row
+
+      const list = getConsumers();
+      let added = 0, skipped = 0;
+      dataRows.forEach(r=>{
+        const no = String(r[0] !== undefined ? r[0] : '').replace(/\D/g,'');
+        const name = String(r[1] !== undefined ? r[1] : '').trim();
+        const bookingId = String(r[2] !== undefined ? r[2] : '').trim();
+        if(!no || !name){ skipped++; return; }
+        const ok = addBookingRecord(list, {no, name, phone: '91'+no, addr: '', bookingId});
+        if(ok) added++; else skipped++;
+      });
+
+      saveStore(list);
+      afterBookingsChanged();
+
+      sumEl.style.display = 'block';
+      sumEl.innerHTML = `✅ Added <b>${added}</b> booking${added===1?'':'s'}` +
+        (skipped ? `, skipped <b>${skipped}</b> (duplicate, invalid number, or missing fields)` : '') +
+        ` out of ${dataRows.length} row${dataRows.length===1?'':'s'}.`;
+      toast(added ? `Added ${added} booking${added===1?'':'s'} from Excel` : 'No new bookings added');
+    }catch(err){
+      errEl.textContent = 'Could not read that file. Make sure it’s the unmodified template.';
+    }finally{
+      evt.target.value = '';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function startQrScan(){
+  const errEl = document.getElementById('qrScanError');
+  const resultEl = document.getElementById('qrScanResult');
+  errEl.textContent = '';
+  resultEl.style.display = 'none';
+  if(typeof QrScanner === 'undefined'){ errEl.textContent = 'QR scanner failed to load. Check your connection and try again.'; return; }
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ errEl.textContent = 'Camera access is not available in this browser.'; return; }
+
+  const video = document.getElementById('qrVideo');
+  document.getElementById('qrVideoWrap').style.display = 'block';
+  document.getElementById('qrStartBtn').style.display = 'none';
+  document.getElementById('qrStopBtn').style.display = 'block';
+
+  qrPartsDone = {}; qrPartsTotal = 0; qrAddedTotal = 0; qrLastText = '';
+  qrScanner = new QrScanner(video, result=>{
+    const text = typeof result === 'string' ? result : result.data;
+    if(text === qrLastText) return; // same code still in front of the camera
+    qrLastText = text;
+    handleScannedText(text);
+  }, {
+    highlightScanRegion:true, highlightCodeOutline:true, returnDetailedScanResult:true,
+    preferredCamera:'environment', maxScansPerSecond:15,
+    // Look at the whole picture, not just a small box in the middle.
+    calculateScanRegion: v => ({x:0, y:0, width:v.videoWidth, height:v.videoHeight,
+      downScaledWidth: Math.min(1000, v.videoWidth), downScaledHeight: Math.round(Math.min(1000, v.videoWidth) * v.videoHeight / v.videoWidth)})
+  });
+
+  qrScanner.start().catch(err=>{
+    errEl.textContent = 'Could not start camera: '+err.message;
+    stopQrScan();
+  });
+}
+
+let qrPartsDone = {}, qrPartsTotal = 0, qrAddedTotal = 0, qrLastText = '';
+function handleScannedText(text){
+  const errEl = document.getElementById('qrScanError');
+  const resultEl = document.getElementById('qrScanResult');
+  try{
+    const r = importBulkPayload(text);
+    errEl.textContent = '';
+    qrPartsDone[r.part] = true; qrPartsTotal = r.parts; qrAddedTotal += r.added;
+    const done = Object.keys(qrPartsDone).length;
+    resultEl.style.display = 'block';
+    if(navigator.vibrate) try{ navigator.vibrate(120); }catch(e){}
+    if(done < r.parts){
+      resultEl.textContent = `✅ Code ${r.part} of ${r.parts} done (${r.added} new). Ask the office to show the next code and keep the camera on it.`;
+      toast(`Code ${r.part} of ${r.parts} done`);
+    } else {
+      resultEl.textContent = `✅ All done — ${qrAddedTotal} new booking${qrAddedTotal===1?'':'s'} added.`;
+      toast(`Imported ${qrAddedTotal} booking${qrAddedTotal===1?'':'s'} from QR code`);
+      stopQrScan();
+    }
+  }catch(err){
+    errEl.textContent = err.message;
+  }
+}
+// Fallback: a photo of the QR code (from the camera or the gallery).
+async function scanQrPhoto(evt){
+  const file = evt.target.files && evt.target.files[0];
+  evt.target.value = '';
+  if(!file) return;
+  const errEl = document.getElementById('qrScanError');
+  if(typeof QrScanner === 'undefined'){ errEl.textContent = 'QR scanner failed to load. Check your connection and try again.'; return; }
+  try{
+    const r = await QrScanner.scanImage(file, {returnDetailedScanResult:true});
+    if(!qrPartsTotal){ qrPartsDone = {}; qrAddedTotal = 0; }
+    handleScannedText(r.data);
+  }catch(e){
+    errEl.textContent = 'No QR code found in that photo. Take it closer and straight on, with the whole code in the picture.';
+  }
+}
+
+function stopQrScan(){
+  if(qrScanner){ qrScanner.stop(); qrScanner.destroy(); qrScanner = null; }
+  document.getElementById('qrVideoWrap').style.display = 'none';
+  document.getElementById('qrStartBtn').style.display = 'block';
+  document.getElementById('qrStopBtn').style.display = 'none';
+}
+
+/* ---------------- Map tiles ----------------
+   Tile providers keep changing their terms, so this is built to be swapped in
+   one place. OpenStreetMap's own servers block apps outright; CARTO now wants
+   an API key. Esri's ArcGIS service needs no key and has street-level coverage
+   for India, so that's the default.
+
+   For production, get a free MapTiler key (maptiler.com — 100k map loads a
+   month, no card) and paste it between the quotes below. The app will pick it
+   up automatically and fall back to Esri if it ever fails. */
+const MAPTILER_KEY = '';
+
+function tileSources(){
+  const list = [];
+  if(MAPTILER_KEY){
+    list.push({
+      url: 'https://api.maptiler.com/maps/streets-v2/256/{z}/{x}/{y}.png?key=' + MAPTILER_KEY,
+      opts: { maxZoom:20, attribution:'&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }
+    });
+  }
+  list.push({
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    opts: { maxZoom:19, attribution:'Tiles &copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors' }
+  });
+  list.push({
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    opts: { maxZoom:19, attribution:'Tiles &copy; Esri' }
+  });
+  return list;
+}
+
+// Adds the base map, moving to the next provider if the current one starts
+// failing. Also surfaces a plain-language note if every provider is down, so
+// a blank map is never left unexplained.
+function addBaseLayer(map){
+  const sources = tileSources();
+  let errors = 0, layer = null;
+  function attach(i){
+    if(layer) map.removeLayer(layer);
+    layer = L.tileLayer(sources[i].url, sources[i].opts).addTo(map);
+    layer.on('tileload', ()=>{ errors = 0; });
+    layer.on('tileerror', ()=>{
+      errors++;
+      if(errors > 4){
+        errors = 0;
+        if(i < sources.length - 1) attach(i + 1);
+        else showMapTrouble(map);
+      }
+    });
+  }
+  attach(0);
+  return layer;
+}
+
+function showMapTrouble(map){
+  const el = map.getContainer();
+  if(el.querySelector('.map-trouble')) return;
+  const box = document.createElement('div');
+  box.className = 'map-trouble';
+  box.style.cssText = 'position:absolute;left:8px;right:8px;bottom:8px;z-index:800;background:#fff7e8;'+
+    'border:1px solid #f0dcb4;color:#7a4e00;border-radius:9px;padding:9px 11px;font-size:12px;line-height:1.45;';
+  box.textContent = 'Map images aren\u2019t loading. Your bookings and pins are fine \u2014 check the internet connection, or open the app from its web address rather than a file on the computer.';
+  el.appendChild(box);
+}
+
+/* ---------------- Set Location ---------------- */
+let setMap, setMarker, setConsumer, setPinDirty = false;
+function initSetMap(){
+  setMap = L.map('setMap').setView(DEPOT, 11);
+  addBaseLayer(setMap);
+  setMap.on('click', e=>{
+    if(!setConsumer) { toast('Load a booking first.'); return; }
+    placeSetPin(e.latlng.lat, e.latlng.lng);
+    markSetPinDirty();
+  });
+}
+function loadForSetLocation(){
+  const val = document.getElementById('setLocInput').value.trim();
+  const errEl = document.getElementById('setLocError');
+  errEl.textContent = '';
+  if(!isValidMobileNo(val)){ errEl.textContent='Enter a valid 10-digit mobile number.'; return; }
+  const all = findConsumers(val);
+  if(all.length > 1){ errEl.innerHTML = connectionButtons(all, 'loadSetLocationKey'); return; }
+  loadSetLocationKey(all[0] ? all[0].no : val);
+}
+function loadSetLocationKey(key){
+  const errEl = document.getElementById('setLocError');
+  errEl.textContent = '';
+  const c = findConsumer(key);
+  if(!c){ errEl.textContent='No booking found for this mobile number.'; return; }
+  setConsumer = c;
+  document.getElementById('setLocDetails').style.display='block';
+  document.getElementById('sl_name').textContent = c.name;
+  document.getElementById('sl_coords').textContent = c.lat.toFixed(4)+', '+c.lng.toFixed(4);
+  const k = knownAddress(c.no);
+  document.getElementById('sl_known').innerHTML = k
+    ? '<span style="color:var(--green);font-weight:700;">\u2713 Yes, ' + bookAgeText(k) + '</span>'
+    : '<span style="color:var(--amber);font-weight:700;">Not pinned yet</span>';
+  if(!setMap) initSetMap();
+  placeSetPin(c.lat, c.lng);
+  setMap.setView([c.lat, c.lng], 14);
+  setTimeout(()=>setMap.invalidateSize(), 50);
+  setPinDirty = false;
+  document.getElementById('sl_dirtyHint').style.display = 'none';
+}
+function placeSetPin(lat,lng){
+  if(setMarker) setMap.removeLayer(setMarker);
+  setMarker = L.marker([lat,lng],{draggable:true}).addTo(setMap);
+  if(setConsumer){
+    setMarker.bindTooltip(mob(setConsumer.no), {permanent:true, direction:'top', offset:[0,-8], className:'no-label'}).openTooltip();
+  }
+  setMarker.on('dragend', ()=>{
+    const p = setMarker.getLatLng();
+    document.getElementById('sl_coords').textContent = p.lat.toFixed(4)+', '+p.lng.toFixed(4);
+    markSetPinDirty();
+  });
+  document.getElementById('sl_coords').textContent = lat.toFixed(4)+', '+lng.toFixed(4);
+}
+function markSetPinDirty(){
+  setPinDirty = true;
+  document.getElementById('sl_dirtyHint').style.display = 'block';
+}
+// Explicit "Save location" button — nothing is written to the booking until this is tapped.
+function saveSetLocation(){
+  if(!setConsumer || !setMarker) return;
+  const p = setMarker.getLatLng();
+  updateConsumer(setConsumer.no, {lat: p.lat, lng: p.lng, status:'shared', updated: Date.now()});
+  rememberAddress(setConsumer.no, p.lat, p.lng); // so next month's booking already knows
+  setPinDirty = false;
+  document.getElementById('sl_dirtyHint').style.display = 'none';
+  toast('Location saved for '+setConsumer.name);
+}
+function useMyLocation(){
+  if(!setConsumer) return;
+  if(!navigator.geolocation){ toast('Geolocation not supported in this browser.'); return; }
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const {latitude, longitude} = pos.coords;
+    placeSetPin(latitude, longitude);
+    setMap.setView([latitude,longitude], 15);
+    markSetPinDirty();
+  }, err=>{
+    toast('Could not get your location: '+err.message);
+  });
+}
+
+/* ---------------- Consumer link simulator ---------------- */
+let clConsumer, clChoices = [];
+function pickConsumerConnection(key){
+  const c = clChoices.find(x => x.no === key);
+  if(!c) return;
+  document.getElementById('clNew').style.display = 'none';
+  document.querySelectorAll('label[for=clNewName], #clNewName, #clNew > .btn').forEach(e => e.style.display = '');
+  showConsumerTabDetails(c.booked ? findConsumer(key) : c);
+}
+
+// "Find customer" — look up by mobile number and show name/booking plus the
+// send-link and preview actions.
+/* Missing mobile number list (from the office): a delivery man who meets the
+   customer types the number here and they become a normal customer. */
+let mmOffset = 0, mmRows = [], mmTimer = null, mmReq = 0;
+function renderMissingCard(){
+  const card = document.getElementById('mmCard');
+  if(card) card.style.display = onlinePossible() ? '' : 'none';
+}
+function openMissingList(){
+  document.getElementById('mmBox').style.display = 'block';
+  document.getElementById('mmOpenBtn').style.display = 'none';
+  mmOffset = 0; loadMissingPhone(0);
+}
+function loadMissingPhone(wait){
+  clearTimeout(mmTimer);
+  mmTimer = setTimeout(async () => {
+    const my = ++mmReq;
+    const qv = document.getElementById('mmSearch').value.trim();
+    const sel = document.getElementById('mmDealer');
+    const dv = sel.value;
+    const listEl = document.getElementById('mmList');
+    try{
+      const d = await staffApi('/api/missing?limit=30&offset=' + mmOffset + '&q=' + encodeURIComponent(qv) + (dv !== '__all' ? '&dealer=' + encodeURIComponent(dv) : ''));
+      if(my !== mmReq) return;
+      sel.innerHTML = '<option value="__all">All dealerships (' + d.all.toLocaleString('en-IN') + ')</option>' +
+        d.dealers.map(x => `<option value="${escapeHtml(x.dealer)}"${x.dealer === dv ? ' selected' : ''}>${escapeHtml(x.dealer || 'No dealership')} (${x.n})</option>`).join('');
+      if(dv !== '__all' && !d.dealers.some(x => x.dealer === dv)) sel.value = '__all';
+      mmRows = d.rows;
+      const from = d.total ? mmOffset + 1 : 0, to = mmOffset + d.rows.length;
+      document.getElementById('mmShowing').textContent = d.total ? `Showing ${from}–${to} of ${d.total.toLocaleString('en-IN')}` : (d.all ? 'No one matches that search.' : '🎉 No one is missing a mobile number.');
+      listEl.innerHTML = d.rows.map(r => `<div class="consumer-row" style="display:block;" id="mmr_${r.id}">
+          <div><b>${escapeHtml(r.name)}</b></div>
+          <div class="small">${escapeHtml(r.address || '')}${r.dealer ? ' · 🏪 ' + escapeHtml(r.dealer) : ''}</div>
+          <div style="display:flex;gap:8px;margin-top:6px;">
+            <input type="tel" inputmode="numeric" maxlength="14" placeholder="10-digit mobile" id="mmIn_${r.id}" style="flex:1;margin:0;" value="${escapeHtml(r.badMobile || '')}"
+              onkeydown="if(event.key==='Enter')fillMissingPhone('${r.id}')">
+            <button class="btn btn-primary" style="width:auto;margin:0;" onclick="fillMissingPhone('${r.id}')">💾 Save</button>
+          </div>
+          <div class="error" id="mmErr_${r.id}"></div>
+        </div>`).join('');
+      document.getElementById('mmPager').innerHTML =
+        (mmOffset > 0 ? `<button class="btn btn-ghost" onclick="mmOffset=Math.max(0,mmOffset-30);loadMissingPhone(0)">◀ Previous</button>` : '') +
+        (to < d.total ? `<button class="btn btn-ghost" onclick="mmOffset+=30;loadMissingPhone(0)">Next ▶</button>` : '');
+    }catch(e){
+      if(my === mmReq) document.getElementById('mmShowing').textContent = 'Could not load the list — check the internet and try again.';
+    }
+  }, wait || 0);
+}
+async function fillMissingPhone(id){
+  const inp = document.getElementById('mmIn_' + id), err = document.getElementById('mmErr_' + id);
+  const row = mmRows.find(r => r.id === id) || {};
+  let no = inp.value.replace(/\D/g, '');
+  if(no.length === 12 && no.startsWith('91')) no = no.slice(2);
+  if(no.length === 11 && no.startsWith('0')) no = no.slice(1);
+  err.textContent = '';
+  if(!isValidMobileNo(no)){ err.textContent = 'Enter a valid 10-digit mobile number.'; return; }
+  try{
+    const d = await staffApi('/api/missing/' + id + '/fix', {method:'POST', body:{no, me: getLoggedInPhone(), name: localStorage.getItem(LOGIN_NAME_KEY) || ''}});
+    if(d.error){ err.textContent = d.error; return; }
+    if(d.taken){
+      err.textContent = 'This number is already saved for ' + (d.taken.name || 'another customer') + ' at this dealership. Check the number, or ask the office.' +
+        (d.taken.address ? '\n📍 ' + d.taken.address : '');
+      err.style.whiteSpace = 'pre-line';
+      return;
+    }
+    const el = document.getElementById('mmr_' + id);
+    if(el) el.innerHTML = `<div>✅ <b>${escapeHtml(row.name || '')}</b> saved with ${escapeHtml(no)}</div>
+      <button class="btn btn-wa" style="margin-top:6px;" onclick="sendLinkToFilled('${no}')">📲 Send location link</button>`;
+    toast('Saved — ' + (row.name || 'customer') + ' is now a customer');
+  }catch(e){ err.textContent = 'Could not save: ' + e.message; }
+}
+function sendLinkToFilled(no){
+  document.getElementById('consumerTokenInput').value = no;
+  window.scrollTo({top: 0, behavior: 'smooth'});
+  lookupForConsumerTab();
+}
+
+async function lookupForConsumerTab(){
+  const val = document.getElementById('consumerTokenInput').value.trim();
+  const errEl = document.getElementById('clError');
+  errEl.textContent = '';
+  document.getElementById('clDetails').style.display = 'none';
+  document.getElementById('clNew').style.display = 'none';
+  document.getElementById('clWaPreview').style.display = 'none';
+  if(!isValidMobileNo(val)){ errEl.textContent = 'Enter a valid 10-digit mobile number.'; return; }
+  // Every dealership this number belongs to: booked on this phone, or in the office list.
+  const here = findConsumers(val);
+  const office = await officeCustomers(val);
+  const opts = new Map();
+  here.forEach(c => opts.set(c.no, Object.assign({}, c, {booked: true})));
+  office.forEach(k => { if(!opts.has(k.no)) opts.set(k.no, {no: k.no, name: k.name, address: k.address || '', dealer: k.dealer || '',
+    phone: '91' + val, booking: 'BK-' + k.no, fromOffice: true}); });
+  if(opts.size > 1){
+    clChoices = [...opts.values()];
+    const box = document.getElementById('clNew');
+    box.style.display = 'block';
+    document.getElementById('clNewNote').innerHTML = connectionButtons(clChoices, 'pickConsumerConnection');
+    document.getElementById('clNewName').parentElement.querySelectorAll('label[for=clNewName], #clNewName, #clNew > .btn').forEach(e => e.style.display = 'none');
+    return;
+  }
+  document.querySelectorAll('label[for=clNewName], #clNewName, #clNew > .btn').forEach(e => e.style.display = '');
+  const c = here[0] || (office[0] ? opts.get(office[0].no) : null);
+  if(c && !c.booked){ document.getElementById('clNew').style.display = 'none'; showConsumerTabDetails(c); return; }
+  if(!c){
+    // Not booked on this phone: offer to add, with the name filled in if the office knows it.
+    document.getElementById('clNew').style.display = 'block';
+    const nameEl = document.getElementById('clNewName');
+    nameEl.value = '';
+    const k = await officeCustomer(val);
+    if(k && k.name){
+      // Already in the office list: show them straight away, ready to send.
+      // The booking is made on this phone when the link is sent.
+      document.getElementById('clNew').style.display = 'none';
+      showConsumerTabDetails({no: val, name: k.name, address: k.address || '', dealer: k.dealer || '',
+        phone: '91' + val, booking: 'BK-' + val, fromOffice: true});
+      return;
+    }
+    document.getElementById('clNewNote').textContent = 'No booking for this number yet. Type the customer\'s name and add them.';
+    return;
+  }
+  showConsumerTabDetails(c);
+}
+function showConsumerTabDetails(c){
+  clConsumer = c;
+  document.getElementById('clNew').style.display = 'none';
+  document.getElementById('clDetails').style.display = 'block';
+  document.getElementById('cl_no').textContent = mob(c.no);
+  const blank = !c.name || c.name === 'New Customer';
+  document.getElementById('cl_name').textContent = blank ? '—' : c.name;
+  document.getElementById('clNameFix').style.display = blank ? 'block' : 'none';
+  document.getElementById('clFixName').value = '';
+  document.getElementById('cl_phone').textContent = c.booking;
+  const addr = c.address && c.address !== 'Address pending' ? c.address : '';
+  document.getElementById('clAddrRow').style.display = addr ? 'flex' : 'none';
+  document.getElementById('cl_addr').textContent = addr;
+  document.getElementById('clDealerRow').style.display = c.dealer ? 'flex' : 'none';
+  document.getElementById('cl_dealer').textContent = c.dealer || '';
+  document.getElementById('clSavedNote').style.display = c.fromOffice ? 'block' : 'none';
+}
+// A customer found in the office list gets a booking on this phone the
+// moment the link goes out, so it is tracked like any other.
+async function bookIfFromOffice(){
+  if(!clConsumer || !clConsumer.fromOffice) return;
+  const c = clConsumer;
+  const list = getConsumers();
+  if(!list.find(x => x.no === c.no)){
+    addBookingRecord(list, {no: c.no, name: c.name, addr: c.address, dealer: c.dealer});
+    saveStore(list);
+    afterBookingsChanged();
+  }
+  if(onlinePossible() && !getTokens()[c.no]){
+    try{
+      const t = await staffApi('/api/links', {method:'POST', body:{items:[{no: c.no, name: c.name}]}});
+      saveTokens(Object.assign(getTokens(), t.tokens));
+    }catch(e){}
+  }
+  clConsumer = findConsumer(c.no) || c;
+}
+async function addFromConsumerTab(){
+  const no = document.getElementById('consumerTokenInput').value.trim();
+  const name = document.getElementById('clNewName').value.replace(/\s+/g,' ').trim();
+  const errEl = document.getElementById('clError');
+  errEl.textContent = '';
+  if(!isValidMobileNo(no)) return;
+  if(!name){ errEl.textContent = 'Enter the customer\'s name.'; document.getElementById('clNewName').focus(); return; }
+  const list = getConsumers();
+  if(!list.find(c => c.no === no)){
+    const k = await officeCustomer(no);
+    addBookingRecord(list, {no, name, addr: k && k.address, dealer: k && k.dealer});
+    saveStore(list);
+    afterBookingsChanged();
+  }
+  // Get the customer's secret link code now, so the link sent next is the proper one.
+  if(onlinePossible()){
+    try{
+      const t = await staffApi('/api/links', {method:'POST', body:{items:[{no, name}]}});
+      saveTokens(Object.assign(getTokens(), t.tokens));
+    }catch(e){}
+  }
+  toast('Booking added for consumer ' + name);
+  showConsumerTabDetails(findConsumer(no));
+}
+function saveNameFromConsumerTab(){
+  if(!clConsumer) return;
+  const name = document.getElementById('clFixName').value.replace(/\s+/g,' ').trim();
+  if(!name) return;
+  updateConsumer(clConsumer.no, {name});
+  showConsumerTabDetails(findConsumer(clConsumer.no));
+  toast('Saved');
+}
+async function sendLinkFromConsumerTab(){
+  if(!clConsumer) return;
+  await bookIfFromOffice();
+  sendWhatsAppLink(clConsumer, 'clWaPreview');
+}
+// Shows exactly the WhatsApp message text that "Send link via WhatsApp" would
+// send — without actually opening WhatsApp — so it can be checked beforehand.
+function previewWaMessage(){
+  if(!clConsumer) return;
+  const el = document.getElementById('clWaPreview');
+  el.style.display = 'block';
+  el.textContent = buildWaMessage(clConsumer);
+}
+
+// Customers used to be sent into this app, which meant handing them a view of
+// every booking in it. They now get share_location.html instead. An old link
+// still in someone's WhatsApp history lands here, so say so plainly rather
+// than silently showing them the delivery man's screen.
+window.addEventListener('load', ()=>{
+  if(/[#&]track=/.test(location.hash)){
+    history.replaceState(null, '', location.pathname);
+    setTimeout(()=>toast('That was an old customer link — ask the office to resend it'), 600);
+  }
+});
+
+// A customer who has shared their location sends back a "Save to app" link.
+// Opening it drops the pin straight onto the right booking.
+window.addEventListener('load', ()=>{
+  const m = location.hash.match(/setloc=(\d{10}),(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if(!m) return;
+  const [, no, lat, lng] = m;
+  history.replaceState(null, '', location.pathname);
+  const c = findConsumer(no);
+  if(!c){ setTimeout(()=>toast('No booking found for '+no), 600); return; }
+  updateConsumer(no, {lat: parseFloat(lat), lng: parseFloat(lng), status:'shared', updated: Date.now()});
+  rememberAddress(no, parseFloat(lat), parseFloat(lng));
+  setTimeout(()=>{
+    toast(c.name + ' shared their location');
+    const liveTab = document.querySelector('[data-tab="live"]');
+    if(liveTab) liveTab.click();
+  }, 600);
+});
+
+
+/* ---------------- Route planning ----------------
+   Orders the pending bookings into a sensible driving sequence. This runs
+   entirely on the phone — no routing service, no API key, works offline.
+
+   The ordering uses straight-line distance between points. That is not the
+   road distance, but across a city like Thane the two track each other closely
+   enough to get the order right, which is the part that saves time. The actual
+   roads and turn-by-turn come from Google Maps when he taps through. */
+
+let routeMap = null, routeStops = [], routeStart = null, routeLayers = [];
+
+// Distance in km between two lat/lng points, over the curve of the earth.
+function haversineKm(a, b){
+  const R = 6371, toRad = d => d * Math.PI / 180;
+  const dLat = toRad(b[0] - a[0]), dLng = toRad(b[1] - a[1]);
+  const s = Math.sin(dLat/2)**2 +
+            Math.cos(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+function routeLegKm(order, start){
+  let total = 0, prev = start;
+  for(const stop of order){ total += haversineKm(prev, [stop.lat, stop.lng]); prev = [stop.lat, stop.lng]; }
+  return total;
+}
+
+// Repeatedly hop to whichever stop is nearest — quick and already decent.
+function nearestNeighbourOrder(stops, start){
+  const left = stops.slice(), order = [];
+  let here = start;
+  while(left.length){
+    let best = 0, bestD = Infinity;
+    left.forEach((c, i) => {
+      const dist = haversineKm(here, [c.lat, c.lng]);
+      if(dist < bestD){ bestD = dist; best = i; }
+    });
+    const chosen = left.splice(best, 1)[0];
+    order.push(chosen);
+    here = [chosen.lat, chosen.lng];
+  }
+  return order;
+}
+
+// Deliberately NOT a global shortest-path optimiser.
+//
+// An optimiser that minimises total kilometres will happily drive past a stop
+// and come back for it later, because that can shave the overall figure. On a
+// screen that looks broken: stop 5 sitting next to stop 1 while 3 and 4 are
+// across town. A delivery man needs a rule he can check at a glance, and the
+// rule is simply "go to the nearest one I haven't done yet". It costs a little
+// distance against a perfect route and is worth every metre of it.
+
+function planRoute(fromDepot){
+  const errEl = document.getElementById('routeError');
+  errEl.textContent = '';
+
+  const pending = getConsumers().filter(c => c.status !== 'delivered');
+  if(!pending.length){
+    document.getElementById('routeResultCard').style.display = 'none';
+    errEl.textContent = 'Nothing pending — every booking is marked delivered.';
+    return;
+  }
+
+  function build(start, label){
+    routeStart = {point: start, label};
+    routeStops = nearestNeighbourOrder(pending, start);
+    renderRoute();
+  }
+
+  if(fromDepot){ build(DEPOT.slice(), 'the depot'); return; }
+
+  if(myLatLng){ build(myLatLng.slice(), 'your location'); return; }
+
+  if(!navigator.geolocation){
+    errEl.textContent = 'This browser can’t provide your location — planning from the depot instead.';
+    build(DEPOT.slice(), 'the depot');
+    return;
+  }
+  errEl.textContent = 'Getting your location…';
+  navigator.geolocation.getCurrentPosition(
+    pos => { errEl.textContent = ''; myLatLng = [pos.coords.latitude, pos.coords.longitude]; build(myLatLng.slice(), 'your location'); },
+    () => { errEl.textContent = 'Couldn’t get your location — planned from the depot instead.'; build(DEPOT.slice(), 'the depot'); },
+    {enableHighAccuracy:true, timeout:10000}
+  );
+}
+
+// The plan goes stale the moment a booking is delivered or a customer shares a
+// location, which is how the Route tab and the Live Map ended up disagreeing.
+// So anything that changes a booking rebuilds the run — and it rebuilds from
+// where he is NOW, not where he was when he first pressed plan, which is what
+// you want after each drop anyway.
+function refreshRouteIfPlanned(){
+  if(!routeStart) return;
+  const card = document.getElementById('routeResultCard');
+  const pending = getConsumers().filter(c => c.status !== 'delivered');
+  if(!pending.length){
+    routeStops = [];
+    if(card) card.style.display = 'none';
+    if(routeMap){ routeLayers.forEach(l => routeMap.removeLayer(l)); routeLayers = []; }
+    const err = document.getElementById('routeError');
+    if(err) err.textContent = 'Nothing pending \u2014 every booking is marked delivered.';
+    return;
+  }
+  const start = myLatLng ? myLatLng.slice() : routeStart.point;
+  routeStart = {point: start, label: myLatLng ? 'your location' : routeStart.label};
+  routeStops = nearestNeighbourOrder(pending, start);
+  renderRoute();
+}
+
+function renderRoute(){
+  const card = document.getElementById('routeResultCard');
+  card.style.display = 'block';
+
+  const start = routeStart.point;
+  const totalKm = routeLegKm(routeStops, start);
+  // ~18 km/h average through city traffic, plus 4 minutes on each doorstep.
+  const mins = Math.round(totalKm / 18 * 60 + routeStops.length * 4);
+  const hrs = Math.floor(mins / 60);
+
+  const allBookings = getConsumers().length;
+  const doneCount = allBookings - routeStops.length;
+  const scopeEl = document.getElementById('routeScope');
+  if(scopeEl){
+    scopeEl.textContent = doneCount
+      ? `Showing ${routeStops.length} pending of ${allBookings} bookings \u2014 ${doneCount} already delivered, so they are not on this run. The Map tab shows all of them.`
+      : `All ${allBookings} bookings are still pending, so every one is on this run.`;
+  }
+
+  document.getElementById('routeSummary').innerHTML =
+    `<div class="route-stat"><b>${routeStops.length}</b><span>Stops</span></div>` +
+    `<div class="route-stat"><b>${totalKm.toFixed(1)}</b><span>km (approx)</span></div>` +
+    `<div class="route-stat"><b>${hrs ? hrs + 'h ' + (mins % 60) + 'm' : mins + 'm'}</b><span>Rough time</span></div>`;
+
+  // list
+  let prev = start;
+  document.getElementById('routeList').innerHTML = routeStops.map((c, i) => {
+    const legKm = haversineKm(prev, [c.lat, c.lng]);
+    prev = [c.lat, c.lng];
+    const known = knownAddress(c.no);
+    const addr = (c.address && c.address !== 'Address pending')
+      ? c.address
+      : (known ? '<span style="color:var(--green);">\u2713 saved doorstep</span>'
+               : '<i>not pinned yet \u2014 ask for location</i>');
+    return `<div class="stop">
+      <div class="stop-num">${i + 1}</div>
+      <div class="stop-body">
+        <div class="stop-name">${c.name}</div>
+        <div class="stop-meta">${escapeHtml(showNo(c))} · ${addr}<br>${legKm.toFixed(1)} km from ${i === 0 ? routeStart.label : 'stop ' + i}</div>
+      </div>
+      <div class="stop-btns">
+        <button class="stop-go" onclick="navigateTo('${c.no}')">Go</button>
+        <button class="stop-done" onclick="routeDelivered('${c.no}')">✅ Delivered</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // map
+  // The route is drawn on the same map as all the bookings (one Map tab).
+  if(!liveMap) initLiveMap();
+  routeMap = liveMap;
+  routeLayers.forEach(l => routeMap.removeLayer(l));
+  routeLayers = [];
+
+  const startIcon = L.divIcon({className:'', iconSize:[18,18], iconAnchor:[9,9],
+    html:'<div style="width:16px;height:16px;border-radius:50%;background:#0a6cff;border:3px solid #fff;box-shadow:0 0 0 2px #0a6cff;"></div>'});
+  routeLayers.push(L.marker(start, {icon:startIcon}).addTo(routeMap).bindPopup('Start — ' + routeStart.label));
+
+  routeStops.forEach((c, i) => {
+    const icon = L.divIcon({className:'', iconSize:[24,24], iconAnchor:[12,12],
+      html:`<div style="width:24px;height:24px;border-radius:50%;background:#c62828;color:#fff;border:2px solid #fff;
+            box-shadow:0 1px 4px rgba(0,0,0,.4);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;">${i+1}</div>`});
+    routeLayers.push(
+      L.marker([c.lat, c.lng], {icon}).addTo(routeMap)
+        .bindPopup(`<b>Stop ${i+1} — ${c.name}</b><br>${escapeHtml(showNo(c))}<br>`+
+          `<button onclick="navigateTo('${c.no}')" style="margin-top:8px;width:100%;background:#0a6cff;color:#fff;border:none;padding:7px 10px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;">🧭 Navigate here</button>`)
+    );
+  });
+
+  const line = L.polyline([start].concat(routeStops.map(c => [c.lat, c.lng])),
+    {color:'#0a6cff', weight:3, opacity:.65, dashArray:'6,6'}).addTo(routeMap);
+  routeLayers.push(line);
+  routeMap.fitBounds(line.getBounds(), {padding:[30,30]});
+  setTimeout(() => routeMap.invalidateSize(), 60);
+}
+
+// Google Maps takes a handful of waypoints in one link. Beyond that it drops
+// them silently, so we send as many as it reliably handles and say so.
+const MAX_WAYPOINTS = 8;
+
+function openRouteInMaps(){
+  if(!routeStops.length) return;
+  const start = routeStart.point;
+  const included = routeStops.slice(0, MAX_WAYPOINTS + 1);
+  const dest = included[included.length - 1];
+  const mid = included.slice(0, -1).map(c => `${c.lat},${c.lng}`).join('|');
+  let url = 'https://www.google.com/maps/dir/?api=1'+
+    `&origin=${start[0]},${start[1]}`+
+    `&destination=${dest.lat},${dest.lng}`+
+    '&travelmode=driving';
+  if(mid) url += `&waypoints=${encodeURIComponent(mid)}`;
+  if(routeStops.length > included.length){
+    toast(`Opening the first ${included.length} stops — Google Maps won't take more in one go`);
+  }
+  window.open(url, '_blank');
+}
+
+function navigateToNextStop(){
+  if(!routeStops.length) return;
+  navigateTo(routeStops[0].no);
+}
+
+/* ---------------- Live tracking ---------------- */
+let liveMap, liveMarkers = {};
+function initLiveMap(){
+  liveMap = L.map('liveMap').setView(DEPOT, 11);
+  addBaseLayer(liveMap);
+  startMyLocationWatch();
+}
+
+/* ---- "You are here" pin: a blue dot that follows the delivery man ---- */
+let myMarker = null, myAccuracyCircle = null, myWatchId = null, myLatLng = null;
+
+function myLocationIcon(){
+  return L.divIcon({
+    className:'',
+    html:`<div style="position:relative;width:18px;height:18px;">
+            <div style="position:absolute;inset:0;border-radius:50%;background:rgba(10,108,255,.28);animation:mypulse 2s ease-out infinite;"></div>
+            <div style="position:absolute;inset:3px;border-radius:50%;background:#0a6cff;border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);"></div>
+          </div>`,
+    iconSize:[18,18],
+    iconAnchor:[9,9]
+  });
+}
+
+function showGeoError(msg){
+  const el = document.getElementById('liveGeoError');
+  if(el) el.textContent = msg;
+}
+
+// watchPosition keeps the dot moving as he drives, rather than a one-off fix.
+function startMyLocationWatch(){
+  if(myWatchId !== null) return; // already watching
+  if(!navigator.geolocation){ showGeoError('This browser can’t provide your location.'); return; }
+  myWatchId = navigator.geolocation.watchPosition(
+    pos => {
+      showGeoError('');
+      myLatLng = [pos.coords.latitude, pos.coords.longitude];
+      drawMyLocation(myLatLng, pos.coords.accuracy);
+    },
+    err => {
+      // 1 = permission denied, 2 = position unavailable, 3 = timeout
+      if(err && err.code === 1) showGeoError('Location permission denied — allow it to see your own pin.');
+      else showGeoError('Couldn’t get your location. Make sure GPS is on and you’re on a secure (https) connection.');
+    },
+    {enableHighAccuracy:true, maximumAge:10000, timeout:15000}
+  );
+}
+
+function drawMyLocation(latlng, accuracy){
+  if(!liveMap) return;
+  if(myMarker){
+    myMarker.setLatLng(latlng);
+  } else {
+    myMarker = L.marker(latlng, {icon: myLocationIcon(), zIndexOffset: 1000})
+      .addTo(liveMap)
+      .bindPopup('<b>You are here</b><br>Your current location');
+  }
+  // A soft circle showing how confident the GPS fix is.
+  if(accuracy && accuracy < 2000){
+    if(myAccuracyCircle) myAccuracyCircle.setLatLng(latlng).setRadius(accuracy);
+    else myAccuracyCircle = L.circle(latlng, {radius:accuracy, color:'#0a6cff', weight:1, opacity:.4, fillColor:'#0a6cff', fillOpacity:.08}).addTo(liveMap);
+  }
+}
+
+function centerOnMe(){
+  if(myLatLng){
+    liveMap.setView(myLatLng, 15);
+    if(myMarker) myMarker.openPopup();
+    return;
+  }
+  showGeoError('');
+  if(!navigator.geolocation){ showGeoError('This browser can’t provide your location.'); return; }
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      myLatLng = [pos.coords.latitude, pos.coords.longitude];
+      drawMyLocation(myLatLng, pos.coords.accuracy);
+      liveMap.setView(myLatLng, 15);
+      startMyLocationWatch(); // keep following from here on
+    },
+    err=>{
+      if(err && err.code === 1) showGeoError('Location permission denied — allow it to see your own pin.');
+      else showGeoError('Couldn’t get your location. Make sure GPS is on and you’re on a secure (https) connection.');
+    },
+    {enableHighAccuracy:true, timeout:10000}
+  );
+}
+
+// Opens turn-by-turn directions in Google Maps (app on phone if installed, web otherwise).
+function navUrl(lat,lng){
+  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+}
+function navigateTo(no){
+  const c = findConsumer(no);
+  if(!c) return;
+  window.open(navUrl(c.lat, c.lng), '_blank');
+}
+
+function statusPillHtml(status){
+  if(status==='delivered') return '<span class="status-pill status-delivered">\u2713 Delivered</span>';
+  if(status==='shared') return '<span class="status-pill status-shared"><span class="dot"></span>Live</span>';
+  return '<span class="status-pill status-waiting"><span class="dot"></span>Waiting</span>';
+}
+// Amber = no location yet, blue = location known and on the run,
+// green = done. Green was previously used for "shared", which made a delivered
+// stop look identical to one still waiting to be visited.
+function dotColorFor(status){
+  if(status==='delivered') return '#1caa5c';
+  if(status==='shared') return '#0a6cff';
+  return '#e08a00';
+}
+
+function renderLive(){
+  if(!liveMap) initLiveMap();
+  const list = getConsumers();
+  const listEl = document.getElementById('liveList');
+  listEl.innerHTML = '';
+  list.forEach(c=>{
+    const item = document.createElement('div');
+    item.className = 'lc-item';
+    const fromBook = c.fromBook && c.status !== 'delivered' ? ' · <span style="color:var(--green);">\u2713 saved address</span>' : '';
+    item.innerHTML = `<div><b>${c.name}</b><span class="meta">${escapeHtml(showNo(c))} · ${c.booking} · ${fmtTime(c.updated)}${fromBook}</span></div>
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
+        ${statusPillHtml(c.status)}
+        <button class="nav-btn" data-no="${c.no}">🧭 Navigate</button>
+        ${c.status!=='delivered' ? `<button class="nav-btn delivered-btn" data-no="${c.no}">✅ Delivered</button>` : ''}
+      </div>`;
+    item.querySelector('.nav-btn').addEventListener('click', (e)=>{
+      e.stopPropagation();
+      navigateTo(c.no);
+    });
+    const deliveredBtn = item.querySelector('.delivered-btn');
+    if(deliveredBtn) deliveredBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      markDelivered(c.no);
+    });
+    item.addEventListener('click', ()=>{
+      liveMap.setView([c.lat,c.lng], 15);
+      if(liveMarkers[c.no]) liveMarkers[c.no].openPopup();
+    });
+    listEl.appendChild(item);
+
+    if(liveMarkers[c.no]) liveMap.removeLayer(liveMarkers[c.no]);
+    const dotColor = dotColorFor(c.status);
+    const done = c.status === 'delivered';
+    // A tick as well as the colour, so it still reads for anyone who can't
+    // easily tell green from amber. Delivered pins fade back a little too,
+    // leaving the stops he still has to make as the loud ones.
+    const icon = L.divIcon({
+      className:'',
+      html:`<div style="display:flex;flex-direction:column;align-items:center;transform:translateY(-6px);opacity:${done ? .8 : 1};">
+              <div style="background:${dotColor};color:#fff;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.3);margin-bottom:3px;">${done ? '\u2713 ' : ''}${mob(c.no)}</div>
+              <div style="width:${done ? 18 : 16}px;height:${done ? 18 : 16}px;border-radius:50%;background:${dotColor};border:2px solid #fff;box-shadow:0 0 0 2px ${dotColor};display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:900;line-height:1;">${done ? '\u2713' : ''}</div>
+            </div>`,
+      iconSize:[done ? 18 : 16, done ? 18 : 16],
+      iconAnchor:[9,9]
+    });
+    liveMarkers[c.no] = L.marker([c.lat,c.lng], {icon}).addTo(liveMap).bindPopup(
+      `<div style="min-width:150px;">`+
+      `<b>${c.name}</b><br>Mobile: ${escapeHtml(showNo(c))}<br>${c.booking}<br>${fmtTime(c.updated)}<br>`+
+      `<button onclick="navigateTo('${c.no}')" style="margin-top:8px;width:100%;background:#0a6cff;color:#fff;border:none;padding:7px 10px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;">🧭 Navigate</button>`+
+      (c.status!=='delivered' ? `<button onclick="markDelivered('${c.no}')" style="margin-top:6px;width:100%;background:#1caa5c;color:#fff;border:none;padding:7px 10px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;">✅ Mark delivered</button>` : '')+
+      `</div>`
+    );
+  });
+}
+// live refresh across tabs (storage event fires in *other* tabs/windows) — this
+// is also how an office upload from the admin app lands on the dashboard.
+window.addEventListener('storage', e=>{
+  if(e.key===STORE_KEY){
+    afterBookingsChanged();
+  }
+  if(e.key===LAST_UPLOAD_KEY){
+    renderUploadNote();
+    toast('New bookings uploaded by the office');
+  }
+});
+setInterval(renderLive, 4000);
+
+/* ---------------- Online database ----------------
+   The office connects a phone once by showing it a setup QR code (it opens
+   this app with #staff=<key>). After that the app checks every 30 seconds for
+   locations customers have sent and drops them onto the map by itself — the
+   delivery man doesn't have to tap anything. */
+
+function getStaffKey(){ try{ return localStorage.getItem(STAFF_KEY_STORE) || ''; }catch(e){ return ''; } }
+function getTokens(){ try{ return JSON.parse(localStorage.getItem(TOKENS_STORE)) || {}; }catch(e){ return {}; } }
+function saveTokens(t){ try{ localStorage.setItem(TOKENS_STORE, JSON.stringify(t)); }catch(e){} }
+function onlinePossible(){ return /^https?:$/.test(location.protocol) && !!getStaffKey(); }
+
+function setNetDot(state){
+  const el = document.getElementById('netDot');
+  if(!el) return;
+  const map = {
+    on:  ['🟢', 'Connected to the office — customer locations arrive by themselves'],
+    off: ['', ''],
+    err: ['🟡', 'Could not reach the office just now — will keep trying'],
+    bad: ['🔴', 'This phone needs to be connected again — ask the office to show the setup QR']
+  };
+  el.textContent = map[state][0];
+  el.title = map[state][1];
+}
+
+async function staffApi(path, opts){
+  opts = opts || {};
+  const r = await fetch(path, {
+    method: opts.method || 'GET',
+    headers: Object.assign({'x-gasdost-key': getStaffKey()}, opts.body ? {'content-type':'application/json'} : {}),
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+    cache: 'no-store'
+  });
+  let d = {};
+  try{ d = await r.json(); }catch(e){}
+  if(!r.ok){ const err = new Error(d.error || ('Server said ' + r.status)); err.status = r.status; throw err; }
+  return d;
+}
+
+// Setup QR from the office: #staff=<key>. Works whether the app was closed
+// (fresh load) or already open in that tab (only the # part changes).
+function takeStaffKey(){
+  const m = location.hash.match(/[#&]staff=([^&]+)/);
+  if(!m) return;
+  history.replaceState(null, '', location.pathname);
+  applyStaffKey(decodeURIComponent(m[1]));
+}
+// Saves the office connection (from the setup link, an in-app scan, or the 6-digit code).
+function applyStaffKey(key){
+  try{ localStorage.setItem(STAFF_KEY_STORE, key); }catch(e){}
+  try{ renderConnectBox(); }catch(e){}
+  // Clear out the demo bookings this phone started with.
+  try{
+    const raw = JSON.parse(localStorage.getItem(STORE_KEY));
+    if(Array.isArray(raw)) localStorage.setItem(STORE_KEY, JSON.stringify(raw.filter(c => !isDemo(c))));
+  }catch(e){}
+  setTimeout(() => toast('✅ This phone is now connected to the office'), 800);
+  if(typeof afterBookingsChanged === 'function' && document.readyState !== 'loading'){
+    try{ afterBookingsChanged(); }catch(e){}
+    setTimeout(syncWithOffice, 300);
+  }
+}
+takeStaffKey();
+window.addEventListener('hashchange', takeStaffKey);
+
+/* ---- Connect this phone to the office from the login screen ----
+   An app added to an iPhone home screen keeps its own storage, apart from
+   Safari, so the connection is made again here: scan the office QR in the
+   app, or type the 6-digit code shown next to it. */
+function renderConnectBox(){
+  try{ renderMissingCard(); }catch(e){}
+  const box = document.getElementById('connectBox');
+  if(!box) return;
+  if(!/^https?:$/.test(location.protocol)){ box.innerHTML = ''; return; }
+  if(getStaffKey()){ box.innerHTML = '<div class="cb cb-ok">✅ Connected to the office</div>'; return; }
+  box.innerHTML = `<div class="cb cb-no">
+      <div class="cb-title">⚠️ Not connected to the office yet</div>
+      <button class="btn btn-primary" type="button" onclick="startPairScan()">📷 Scan office QR</button>
+      <div class="hint" style="margin:10px 0 0;">or type the 6-digit code from the office screen:</div>
+      <div class="cb-code">
+        <input type="text" id="pairCodeInput" inputmode="numeric" maxlength="7" placeholder="000 000" autocomplete="one-time-code">
+        <button class="btn btn-ghost" type="button" onclick="claimPairCode()">Connect</button>
+      </div>
+      <div class="error" id="pairErr"></div>
+    </div>`;
+}
+async function claimPairCode(){
+  const inp = document.getElementById('pairCodeInput'), err = document.getElementById('pairErr');
+  const code = (inp.value || '').replace(/\D/g, '');
+  err.textContent = '';
+  if(code.length !== 6){ err.textContent = 'Enter the 6-digit code from the office screen.'; return; }
+  try{
+    const r = await fetch('/api/p/claim', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({code})});
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok || !d.key){ err.textContent = d.error || 'That code did not work. Ask the office for a new one.'; return; }
+    applyStaffKey(d.key);
+  }catch(e){ err.textContent = 'No internet. Try again when online.'; }
+}
+let pairScanner = null;
+function startPairScan(){
+  const err = document.getElementById('pairScanErr');
+  err.textContent = '';
+  document.getElementById('pairScan').style.display = 'flex';
+  if(typeof QrScanner === 'undefined' || !navigator.mediaDevices){ err.textContent = 'Camera not available here. Type the 6-digit code instead.'; return; }
+  pairScanner = new QrScanner(document.getElementById('pairVideo'), res => {
+    const text = typeof res === 'string' ? res : res.data;
+    const m = /[#&]staff=([^&\s]+)/.exec(text || '');
+    if(!m){ err.textContent = 'That is not the office setup QR. Ask the office for "Show setup QR code".'; return; }
+    stopPairScan();
+    applyStaffKey(decodeURIComponent(m[1]));
+  }, {returnDetailedScanResult:true, preferredCamera:'environment', maxScansPerSecond:10, highlightScanRegion:true});
+  pairScanner.start().catch(e => { err.textContent = 'Could not open the camera: ' + e.message + '. Type the 6-digit code instead.'; });
+}
+function stopPairScan(){
+  if(pairScanner){ try{ pairScanner.stop(); pairScanner.destroy(); }catch(e){} pairScanner = null; }
+  document.getElementById('pairScan').style.display = 'none';
+}
+document.addEventListener('DOMContentLoaded', renderConnectBox);
+setTimeout(renderConnectBox, 0);
+
+/* ---- Booking sync with the office ----
+   The phone keeps its own copy of its bookings (so it works without signal)
+   and the office database is the shared copy. Changes made here are noted
+   in an outbox and sent up; every 30 seconds whatever changed at the office
+   (new bookings, customer details, locations customers confirmed, deliveries
+   by others) comes down. */
+const SYNC_SNAP_STORE = 'lmbg_sync_snap_v1';   // what the office last agreed each booking looks like
+const SYNC_OUTBOX_STORE = 'lmbg_sync_outbox_v1';
+const SYNC_SINCE_STORE = 'lmbg_sync_since_v1';
+let applyingRemote = false;
+
+function readJSON(key, fallback){ try{ const v = JSON.parse(localStorage.getItem(key)); return v == null ? fallback : v; }catch(e){ return fallback; } }
+function writeJSON(key, v){ try{ localStorage.setItem(key, JSON.stringify(v)); }catch(e){} }
+const r6 = v => (typeof v === 'number' ? Math.round(v * 1e6) / 1e6 : null);
+function sig(c){
+  return { status: c.status, lat: r6(c.lat), lng: r6(c.lng),
+           name: c.name === 'New Customer' ? '' : (c.name || ''),
+           address: c.address === 'Address pending' ? '' : (c.address || '') };
+}
+function newBookingPayload(c){
+  return { no: c.no, name: c.name, address: c.address, dealer: c.dealer || '', booking: c.booking };
+}
+
+// Compare what is on the phone with what the office last saw, and note the difference.
+function queueChanges(list){
+  try{ queueChangesInner(list); }catch(e){ /* app still starting up — the next save will catch up */ }
+}
+function queueChangesInner(list){
+  if(applyingRemote || !onlinePossible() || !getLoggedInPhone()) return;
+  const snap = readJSON(SYNC_SNAP_STORE, null);
+  const firstTime = snap === null;
+  const s2 = snap || {};
+  const out = readJSON(SYNC_OUTBOX_STORE, []);
+  const here = new Set();
+  list.forEach(c => {
+    if(!c || !c.no || isDemo(c)) return;
+    here.add(c.no);
+    const now = sig(c), was = s2[c.no];
+    if(!was){
+      out.push({kind:'new', b: newBookingPayload(c)});
+      if(c.status === 'delivered') out.push({kind:'op', op:{op:'delivered', no:c.no, at:c.deliveredAt || Date.now()}});
+      else if(c.status === 'shared' && now.lat != null) out.push({kind:'op', op:{op:'pin', no:c.no, lat:c.lat, lng:c.lng}});
+    } else {
+      if(was.status !== 'delivered' && now.status === 'delivered') out.push({kind:'op', op:{op:'delivered', no:c.no, at:c.deliveredAt || Date.now()}});
+      if(was.status === 'delivered' && now.status !== 'delivered') out.push({kind:'op', op:{op:'undelivered', no:c.no}});
+      if(now.status !== 'waiting' && now.lat != null && (now.lat !== was.lat || now.lng !== was.lng))
+        out.push({kind:'op', op:{op:'pin', no:c.no, lat:c.lat, lng:c.lng}});
+      if((now.name && now.name !== was.name) || (now.address && now.address !== was.address))
+        out.push({kind:'op', op:{op:'edit', no:c.no, name:now.name, address:now.address}});
+    }
+    s2[c.no] = now;
+  });
+  if(!firstTime){
+    Object.keys(s2).forEach(no => { if(!here.has(no)){ out.push({kind:'op', op:{op:'delete', no}}); delete s2[no]; } });
+  }
+  writeJSON(SYNC_SNAP_STORE, s2);
+  writeJSON(SYNC_OUTBOX_STORE, out);
+  clearTimeout(queueChanges._t);
+  queueChanges._t = setTimeout(syncWithOffice, 800); // send soon, in one go
+}
+
+async function flushOutbox(me){
+  const out = readJSON(SYNC_OUTBOX_STORE, []);
+  if(!out.length) return;
+  const news = out.filter(x => x.kind === 'new').map(x => x.b);
+  const ops = out.filter(x => x.kind === 'op').map(x => x.op);
+  for(let i = 0; i < news.length; i += 1000) await staffApi('/api/bookings', {method:'POST', body:{bookings: news.slice(i, i + 1000), me}});
+  for(let i = 0; i < ops.length; i += 400) await staffApi('/api/ops', {method:'POST', body:{ops: ops.slice(i, i + 400), me}});
+  // Only clear what was sent — anything added meanwhile stays for next time.
+  const now = readJSON(SYNC_OUTBOX_STORE, []);
+  writeJSON(SYNC_OUTBOX_STORE, now.slice(out.length));
+}
+
+// Turn the office's copy of a booking into the shape this app uses.
+function fromServer(b, old){
+  const known = knownAddress(b.no);
+  const hasPin = typeof b.lat === 'number';
+  return Object.assign({}, old || {}, {
+    no: b.no,
+    name: b.name || (old && old.name) || 'New Customer',
+    phone: '91' + mob(b.no),
+    address: b.address || (old && old.address !== 'Address pending' && old.address) || 'Address pending',
+    dealer: b.dealer || '',
+    booking: b.booking || ('BK-' + b.no),
+    status: b.status,
+    lat: hasPin ? b.lat : (known ? known.lat : (old ? old.lat : DEPOT[0])),
+    lng: hasPin ? b.lng : (known ? known.lng : (old ? old.lng : DEPOT[1])),
+    updated: hasPin ? b.updated : (old ? old.updated : null),
+    fromBook: !hasPin && !!known,
+    assignedTo: b.assignedTo, deliveredBy: b.deliveredBy, deliveredAt: b.deliveredAt
+  });
+}
+
+// The office can log a phone out from its Delivery status screen.
+function checkOfficeLogout(logoutAt){
+  const loginAt = +localStorage.getItem(LOGIN_AT_KEY) || 0;
+  if(!logoutAt || !getLoggedInPhone() || logoutAt <= loginAt) return false;
+  localStorage.removeItem(LOGIN_KEY);
+  clearSyncedBookings();
+  showLogin();
+  toast('The office has logged you out of this phone');
+  return true;
+}
+// Bookings on a phone belong to whoever is logged in — clear them on logout
+// so the next person starts clean (the office still has every booking).
+function clearSyncedBookings(){
+  try{
+    if(onlinePossible()){
+      saveStoreRaw([]);
+      localStorage.removeItem(SYNC_SNAP_STORE);
+      localStorage.removeItem(SYNC_OUTBOX_STORE);
+      localStorage.removeItem(SYNC_SINCE_STORE);
+      afterBookingsChanged();
+    }
+  }catch(e){}
+}
+
+let syncBusy = false;
+async function syncWithOffice(){
+  if(!onlinePossible() || syncBusy || !getLoggedInPhone()) return;
+  syncBusy = true;
+  try{
+    const me = getLoggedInPhone();
+    // First time on this phone: everything already here goes up once.
+    if(readJSON(SYNC_SNAP_STORE, null) === null){ writeJSON(SYNC_SNAP_STORE, null); queueChanges(getConsumers()); clearTimeout(queueChanges._t); }
+    await flushOutbox(me);
+
+    const since = readJSON(SYNC_SINCE_STORE, 0);
+    const d = await staffApi('/api/sync?me=' + me + (since ? '&since=' + since : ''));
+    const pending = new Set(readJSON(SYNC_OUTBOX_STORE, []).map(x => (x.b || x.op).no));
+    const list = getConsumers();
+    const snap = readJSON(SYNC_SNAP_STORE, {}) || {};
+    const fresh = [], extraOps = [];
+    let changed = false, newFromOffice = 0;
+    d.bookings.forEach(b => {
+      if(pending.has(b.no)) return; // our own change is still on its way up
+      const idx = list.findIndex(x => x.no === b.no);
+      if(idx < 0 && b.status === 'delivered' && b.deliveredAt && b.deliveredAt < new Date().setHours(0, 0, 0, 0)) return; // yesterday's
+
+      if(b.deleted){
+        if(idx > -1){ list.splice(idx, 1); changed = true; }
+        delete snap[b.no];
+        return;
+      }
+      const old = idx > -1 ? list[idx] : null;
+      const c = fromServer(b, old);
+      // A doorstep this phone already knows: use it, and tell the office.
+      if(c.fromBook && b.status === 'waiting'){
+        c.status = 'shared';
+        extraOps.push({kind:'op', op:{op:'pin', no:c.no, lat:c.lat, lng:c.lng}});
+      }
+      if(typeof b.lat === 'number' && b.status !== 'delivered' && (!old || r6(old.lat) !== r6(b.lat) || r6(old.lng) !== r6(b.lng))){
+        if(old) fresh.push(c);
+        rememberAddress(b.no, b.lat, b.lng);
+      }
+      if(!old && b.source === 'office') newFromOffice++;
+      if(idx > -1) list[idx] = c; else list.push(c);
+      snap[b.no] = sig(c);
+      changed = true;
+    });
+    // Anything the office moved to someone else (or cancelled) leaves this phone.
+    let gone = 0;
+    if(Array.isArray(d.mine)){
+      const keep = new Set(d.mine);
+      for(let i = list.length - 1; i >= 0; i--){
+        const c = list[i];
+        if(keep.has(c.no) || pending.has(c.no) || !snap[c.no] || c.status === 'delivered') continue;
+        list.splice(i, 1); delete snap[c.no]; gone++; changed = true;
+      }
+    }
+    if(changed){
+      applyingRemote = true;
+      try{ saveStoreRaw(list); } finally { applyingRemote = false; }
+      writeJSON(SYNC_SNAP_STORE, snap);
+      afterBookingsChanged();
+    }
+    if(extraOps.length) writeJSON(SYNC_OUTBOX_STORE, readJSON(SYNC_OUTBOX_STORE, []).concat(extraOps));
+    writeJSON(SYNC_SINCE_STORE, d.now);
+    if(checkOfficeLogout(d.logoutAt)) return;
+    if(fresh.length === 1) toast('📍 ' + (fresh[0].name || fresh[0].no) + ' shared their location');
+    else if(fresh.length > 1) toast('📍 ' + fresh.length + ' customers shared their location');
+    if(newFromOffice) toast('New bookings uploaded by the office');
+    else if(gone) toast(gone === 1 ? '↪ 1 booking was moved by the office' : '↪ ' + gone + ' bookings were moved by the office');
+
+    // Secret link codes for any booking that doesn't have one yet.
+    const tokens = getTokens();
+    const need = getConsumers().filter(c => !tokens[c.no] && !isDemo(c))
+      .map(c => ({no:c.no, name:c.name, address:c.address, dealer:c.dealer}));
+    if(need.length){
+      const t = await staffApi('/api/links', {method:'POST', body:{items: need.slice(0, 1000)}});
+      saveTokens(Object.assign(tokens, t.tokens));
+    }
+    setNetDot('on');
+  }catch(e){
+    setNetDot(e.status === 401 ? 'bad' : 'err');
+  }finally{
+    syncBusy = false;
+  }
+}
+setInterval(syncWithOffice, 30000);
+
+// A new day starts clean: yesterday's delivered bookings leave the phone at
+// midnight (the office keeps every one in Delivery history).
+function clearYesterdaysDeliveries(){
+  try{
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const list = getConsumers();
+    let stamped = false;
+    list.forEach(c => { if(c.status === 'delivered' && !c.deliveredAt){ c.deliveredAt = Date.now(); stamped = true; } });
+    const keep = list.filter(c => !(c.status === 'delivered' && c.deliveredAt < start.getTime()));
+    if(keep.length === list.length && !stamped) return;
+    const snap = readJSON(SYNC_SNAP_STORE, null);
+    if(snap){ list.forEach(c => { if(!keep.includes(c)) delete snap[c.no]; }); writeJSON(SYNC_SNAP_STORE, snap); }
+    applyingRemote = true; // not a cancel — nothing to tell the office
+    try{ saveStoreRaw(keep); } finally { applyingRemote = false; }
+    if(keep.length !== list.length) afterBookingsChanged();
+  }catch(e){}
+}
+clearYesterdaysDeliveries();
+setInterval(clearYesterdaysDeliveries, 60000);
+document.addEventListener('visibilitychange', () => { if(!document.hidden) syncWithOffice(); });
+
+/* ---------------- init ---------------- */
+getConsumers(); // seeds if empty
+initLiveMap();
+renderLive();
+renderDashboardStats();
+anchorToCurrentLocation(); // re-center mock bookings on the device's real GPS location
+
+// A name is now required too. Older logins without one pick it up silently if
+// we already know it; only a truly unknown number is asked, and only once.
+(function startup(){
+  const phone = getLoggedInPhone();
+  if(phone && !getLoggedInName()){
+    const n = knownNameFor(phone);
+    if(n){ try{ localStorage.setItem(LOGIN_NAME_KEY, n); }catch(e){} rememberName(phone, n); }
+  }
+  if(phone && getLoggedInName()){ showApp(); } else { showLogin(); }
+  setTimeout(syncWithOffice, 300);
+})();
+const loginPhoneInput = document.getElementById('loginPhoneInput');
+if(loginPhoneInput) loginPhoneInput.addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
+const loginNameInput = document.getElementById('loginNameInput');
+// Typing a number this phone already knows fills the name in by itself.
+if(loginPhoneInput) loginPhoneInput.addEventListener('input', ()=>{
+  const v = loginPhoneInput.value.replace(/\D/g,'');
+  if(v.length === 10 && loginNameInput){
+    const n = knownNameFor('91' + v);
+    if(n) loginNameInput.value = n;
+  }
+});
+if(loginNameInput) loginNameInput.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('loginPhoneInput').focus(); });
+
+// Keep "active" status fresh while the app is open, and whenever this tab
+// switches back to the Dashboard.
+setInterval(()=>{ if(getLoggedInPhone()) heartbeat(); }, 60000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && getLoggedInPhone()) heartbeat(); });
+
+/* ---------------- PWA: install + service worker ---------------- */
+
+// Install button and offline support: see install.js
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+# Never let the browser cache the service worker itself, otherwise app updates
+# can take a day or more to reach phones that already installed the PWA.
+/sw.js
+  Cache-Control: no-cache
+
+/manifest.json
+  Cache-Control: no-cache

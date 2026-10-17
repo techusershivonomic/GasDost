@@ -1,0 +1,8 @@
+# Static pages live in public/, the server code in netlify/functions/.
+# Keeping them apart means the server code is never served as a web page.
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
