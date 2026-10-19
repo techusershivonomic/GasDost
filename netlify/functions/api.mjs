@@ -40,11 +40,18 @@
 //   POST   /api/team/<phone>/logout            sign that phone out                         (admin)
 //   POST   /api/team/<phone>/remove            sign out + open bookings to the office     (admin)
 //   POST   /api/team/<phone>/bye               the phone signed itself out                (admin, staff)
+//   POST   /api/nc                             punch a new connection (Aadhaar photos)    (staff)
+//   GET    /api/nc/mine?me=                    my fiber stock + my new connections        (staff)
+//   GET    /api/nc · /api/nc/stock             list · stock per delivery man              (admin)
+//   POST   /api/nc/stock                       give (+) / take back (−) stock             (admin)
+//   GET    /api/nc/<id>/photo?side=            Aadhaar photo                              (admin)
+//   POST   /api/nc/<id>/status · /cash         done / rejected · cash received            (admin)
 
 import {
   roleOf, staffKey, json, isPartner, normKey,
   searchCustomers, upsertCustomers, deleteCustomer, restoreCustomers, listBin, deleteLog, checkPin, changePin, addMissing, listMissing, fixMissing, missingFilled, deleteMissing, clearMissing, deleteAllCustomers, lookupCustomers, ensureTokens,
   newBookings, applyOps, syncForPhone, listBookings, statusSummary, bookingsBehind, deliveryHistory, customerDeliveries, listDealers, dealerSummary, linkTracker, trackerList,
+  ncStock, ncStockFor, ncMoveStock, ncStockLog, ncCreate, ncList, ncPhoto, ncSetStatus, ncCash,
   pingTeam, newPairCode, listTeam, deleteTeam, logoutTeam, removeTeam, teamNames, logoutAtFor, getMeta, setMeta, importOld,
 } from "../lib/db.mjs";
 
@@ -120,6 +127,33 @@ export default async (req) => {
         if (body.confirm !== "DELETE ALL") return json({ error: "Not confirmed" }, 400);
         return json({ ok: true, deleted: await deleteAllCustomers(by) });
       }
+    }
+
+    // New connections (fiber cylinders). Phones punch them; the office gives
+    // stock, checks Aadhaar photos and marks them done.
+    if (what === "nc") {
+      const nid = /^\d+$/.test(id || "") ? id : null;
+      if (!isAdmin) {
+        const me = isPartner(body.me || p.get("me")) ? (body.me || p.get("me")) : null;
+        if (!me) return json({ error: "Log in on this phone first." }, 400);
+        if (m === "GET" && id === "mine") {
+          const list = await ncList({ phone: me, limit: 30 });
+          return json({ stock: await ncStockFor(me), dealers: await listDealers(), list: list.map(({ aadhaar, hasPhotos, ...r }) => r) });
+        }
+        if (m === "POST" && !id) return json(await ncCreate(body, me));
+        return adminOnly();
+      }
+      if (m === "GET" && id === "stock") return json({ stock: await ncStock(), log: await ncStockLog() });
+      if (m === "POST" && id === "stock") return json(await ncMoveStock(body.phone, body.qty, body.note));
+      if (m === "GET" && !id) return json({ list: await ncList({ status: p.get("status") || "", phone: p.get("phone") || "",
+        text: p.get("q") || "", limit: +p.get("limit") || 300, from: p.get("from") || null, to: p.get("to") || null }) });
+      if (m === "GET" && nid && parts2 === "photo") {
+        const ph = await ncPhoto(nid, p.get("side") === "back" ? "back" : "front");
+        if (!ph) return json({ error: "No photo" }, 404);
+        return new Response(ph.data, { headers: { "content-type": ph.mime, "cache-control": "no-store, private" } });
+      }
+      if (m === "POST" && nid && parts2 === "status") return json(await ncSetStatus(nid, body.status, body.note));
+      if (m === "POST" && nid && parts2 === "cash") return json(await ncCash(nid, !!body.received));
     }
 
     if (what === "missing") {

@@ -168,6 +168,9 @@
     <button class="tab-btn" data-tab="send" onclick="switchTab('send')">
       📤 Send links <span class="count" id="tabSendCount">0</span>
     </button>
+    <button class="tab-btn" data-tab="newconn" onclick="switchTab('newconn')">
+      🆕 New connections <span class="count" id="tabNcCount">0</span>
+    </button>
   </nav>
 </div>
 
@@ -690,6 +693,60 @@
 
 </section>
 
+<!-- ============ NEW CONNECTIONS (fiber cylinders) ============ -->
+<section class="tab-panel" id="tab-newconn">
+  <div class="card">
+    <h2>🛢️ Fiber cylinder stock</h2>
+    <p class="small">Give cylinders to a delivery man before he goes out. Each new connection he saves uses one. A rejected connection gives the cylinder back to his stock.</p>
+    <div class="form-row">
+      <div><label for="ncMan">Delivery man</label><select id="ncMan"></select></div>
+      <div><label for="ncQty">How many</label><input type="number" id="ncQty" min="1" max="500" value="10"></div>
+    </div>
+    <div class="form-row">
+      <button class="btn btn-primary" onclick="ncMove(1)">➕ Give stock</button>
+      <button class="btn btn-ghost" onclick="ncMove(-1)">↩ Take back</button>
+    </div>
+    <div class="error" id="ncStockErr"></div>
+    <table>
+      <thead><tr><th>Delivery man</th><th>Given</th><th>Returned</th><th>Used</th><th>With him</th></tr></thead>
+      <tbody id="ncStockBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>💰 Money collected</h2>
+    <p class="small">Cash and UPI the delivery men wrote down for new connections. Tick <b>Received</b> when the cash reaches the office.</p>
+    <table>
+      <thead><tr><th>Delivery man</th><th>Cash to collect</th><th>UPI</th><th>Received</th></tr></thead>
+      <tbody id="ncMoneyBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card" style="grid-column:1 / -1;">
+    <div class="batch-header">
+      <h2 style="margin:0;">🆕 New connections</h2>
+      <button class="btn btn-ghost" style="width:auto;" onclick="ncExport()">⬇ Download Excel</button>
+    </div>
+    <div class="form-row" style="grid-template-columns:2fr 1fr 1fr;margin-top:12px;">
+      <div><label for="ncSearch">Find</label><input type="text" id="ncSearch" placeholder="Name, mobile, address or cylinder no." oninput="clearTimeout(ncTimer);ncTimer=setTimeout(loadNc,300)" autocomplete="off"></div>
+      <div><label for="ncStatus">Status</label><select id="ncStatus" onchange="loadNc()"><option value="">All</option><option value="pending" selected>⏳ Pending</option><option value="done">✅ Done</option><option value="rejected">❌ Rejected</option></select></div>
+      <div><label for="ncWho">Delivery man</label><select id="ncWho" onchange="loadNc()"><option value="">Everyone</option></select></div>
+    </div>
+    <p class="small">🔒 Aadhaar photos open only here and are deleted 90 days after a connection is marked Done or Rejected. When you mark one <b>✅ Done</b> (after entering it in the oil-company portal), the customer is added to Saved customers with the doorstep already pinned.</p>
+    <div style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>Date</th><th>Delivery man</th><th>Customer</th><th>Dealership</th><th>Cylinder no.</th><th>Money</th><th>Aadhaar</th><th>Status</th></tr></thead>
+      <tbody id="ncBody"></tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<div id="ncPhotoBox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:2000;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:20px;" onclick="if(event.target===this)ncClosePhotos()">
+  <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;max-height:80vh;overflow:auto;" id="ncPhotoImgs"></div>
+  <button class="btn btn-ghost" style="width:auto;" onclick="ncClosePhotos()">Close</button>
+</div>
+
 </main>
 
 <div class="toast" id="toast"></div>
@@ -718,6 +775,7 @@ function switchTab(tab){
   if(tab==='send') loadRecipients();
   if(tab==='customers'){ renderCustomers(); loadMissing(); loadBin(); }
   if(tab==='bookings'){ renderBookingSearch(); fillAssignList(); }
+  if(tab==='newconn') loadNcAll();
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
@@ -1333,6 +1391,137 @@ function fmtAgo(ts){
 // Rolls bookings up per delivery man. A booking counts toward whoever it's
 // assigned to; if it's unassigned but somebody marked it delivered, it counts
 // toward them instead. Anything left over lands in an "Unassigned" row.
+/* ---------------- New connections (fiber cylinders) ---------------- */
+let ncRows = [], ncTimer = null, ncStockRows = [];
+async function loadNcAll(){
+  if(!isOnline()){ document.getElementById('ncBody').innerHTML = '<tr><td colspan="8">Connect to the online database first.</td></tr>'; return; }
+  await Promise.all([loadNcStock(), loadNc()]);
+}
+function ncManName(phone){
+  const t = getTeam().find(m => m.phone === phone) || ncStockRows.find(m => m.phone === phone);
+  return (t && t.name) || ('+' + phone);
+}
+async function loadNcStock(){
+  try{
+    const d = await api('/api/nc/stock');
+    ncStockRows = d.stock;
+    const team = getTeam();
+    const men = new Map();
+    team.forEach(m => men.set(m.phone, m.name || ('+' + m.phone)));
+    d.stock.forEach(m => { if(!men.has(m.phone)) men.set(m.phone, m.name || ('+' + m.phone)); });
+    const sel = document.getElementById('ncMan'), keep = sel.value;
+    sel.innerHTML = '<option value="">👉 Choose delivery man</option>' + [...men].sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([ph, nm]) => `<option value="${esc(ph)}">${esc(nm)}</option>`).join('');
+    sel.value = keep;
+    const who = document.getElementById('ncWho'), keepW = who.value;
+    who.innerHTML = '<option value="">Everyone</option>' + [...men].map(([ph, nm]) => `<option value="${esc(ph)}">${esc(nm)}</option>`).join('');
+    who.value = keepW;
+    document.getElementById('ncStockBody').innerHTML = d.stock.length ? d.stock.map(m => `<tr>
+        <td>${esc(m.name || ('+' + m.phone))}</td><td>${m.given}</td><td>${m.returned}</td><td>${m.used}</td>
+        <td><b style="color:${m.left > 0 ? 'var(--green)' : '#d33'};font-size:15px;">${m.left}</b></td></tr>`).join('')
+      : '<tr><td colspan="5" class="hint">No stock given yet.</td></tr>';
+  }catch(e){ document.getElementById('ncStockErr').textContent = 'Could not load stock: ' + e.message; }
+}
+async function ncMove(sign){
+  const err = document.getElementById('ncStockErr'); err.textContent = '';
+  const phone = document.getElementById('ncMan').value, qty = parseInt(document.getElementById('ncQty').value, 10) || 0;
+  if(!phone){ err.textContent = 'Choose the delivery man.'; return; }
+  if(qty <= 0){ err.textContent = 'Type how many cylinders.'; return; }
+  try{
+    const d = await api('/api/nc/stock', {method:'POST', body:{phone, qty: sign * qty}});
+    if(d.error){ err.textContent = d.error; return; }
+    toast((sign > 0 ? 'Gave ' : 'Took back ') + qty + ' cylinder' + (qty === 1 ? '' : 's') + ' — ' + ncManName(phone) + ' now has ' + d.stock.left);
+    loadNcStock();
+  }catch(e){ err.textContent = 'Could not save: ' + e.message; }
+}
+async function loadNc(){
+  try{
+    const qv = document.getElementById('ncSearch').value.trim();
+    const d = await api('/api/nc?status=' + encodeURIComponent(document.getElementById('ncStatus').value) +
+      '&phone=' + encodeURIComponent(document.getElementById('ncWho').value) + '&q=' + encodeURIComponent(qv));
+    ncRows = d.list;
+    renderNc();
+    // Pending count on the tab, and the money table (from all connections).
+    const all = await api('/api/nc?limit=5000');
+    document.getElementById('tabNcCount').textContent = all.list.filter(r => r.status === 'pending').length;
+    renderNcMoney(all.list);
+  }catch(e){ document.getElementById('ncBody').innerHTML = '<tr><td colspan="8">Could not load: ' + esc(e.message) + '</td></tr>'; }
+}
+function renderNc(){
+  const when = t => new Date(t).toLocaleString('en-IN', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+  const pill = {pending:'⏳ Pending', done:'✅ Done', rejected:'❌ Rejected'};
+  document.getElementById('ncBody').innerHTML = ncRows.length ? ncRows.map(r => `<tr>
+      <td style="white-space:nowrap;">${esc(when(r.at))}</td>
+      <td>${esc(r.man || ncManName(r.phone))}</td>
+      <td><b>${esc(r.name)}</b><br>📞 ${esc(r.mobile)}<br><span class="hint">${esc(r.address || '')}</span>
+        ${r.lat != null ? `<br><a href="https://www.google.com/maps?q=${r.lat},${r.lng}" target="_blank" rel="noopener">📍 Map</a>` : '<br><span class="hint">📍 no location</span>'}</td>
+      <td>${esc(r.dealer || '')}</td>
+      <td>${esc(r.serial || '—')}</td>
+      <td style="white-space:nowrap;">${r.amount ? '₹' + r.amount.toLocaleString('en-IN') + ' · ' + (r.payMode === 'upi' ? 'UPI' : 'Cash') : '—'}
+        ${r.amount && r.payMode === 'cash' ? `<br><label style="font-weight:600;cursor:pointer;"><input type="checkbox" ${r.cashReceivedAt ? 'checked' : ''} onchange="ncCash('${r.id}', this.checked)"> Received</label>` : ''}</td>
+      <td style="white-space:nowrap;">${esc(r.aadhaar || '—')}${r.hasPhotos ? `<br><button class="send-btn again" onclick="ncShowPhotos('${r.id}')">🪪 View photos</button>` : '<br><span class="hint">photos deleted</span>'}</td>
+      <td style="white-space:nowrap;"><b>${pill[r.status] || esc(r.status)}</b>${r.statusNote ? '<br><span class="hint">' + esc(r.statusNote) + '</span>' : ''}<br>
+        ${r.status !== 'done' ? `<button class="send-btn todo" onclick="ncStatus('${r.id}','done')">✅ Done</button>` : ''}
+        ${r.status !== 'rejected' ? `<button class="send-btn again" style="color:#d33;" onclick="ncStatus('${r.id}','rejected')">❌ Reject</button>` : ''}
+        ${r.status !== 'pending' ? `<button class="send-btn again" onclick="ncStatus('${r.id}','pending')">↺ Pending</button>` : ''}</td>
+    </tr>`).join('') : '<tr><td colspan="8" class="hint">Nothing here.</td></tr>';
+}
+function renderNcMoney(list){
+  const by = {};
+  list.filter(r => r.status !== 'rejected' && r.amount).forEach(r => {
+    const m = by[r.phone] = by[r.phone] || {cash: 0, upi: 0, got: 0, name: r.man};
+    if(r.payMode === 'upi') m.upi += r.amount;
+    else if(r.cashReceivedAt) m.got += r.amount; else m.cash += r.amount;
+  });
+  const rows = Object.entries(by);
+  const rs = n => '₹' + n.toLocaleString('en-IN');
+  document.getElementById('ncMoneyBody').innerHTML = rows.length ? rows.map(([ph, m]) => `<tr>
+      <td>${esc(m.name || ncManName(ph))}</td><td><b style="color:${m.cash ? '#d33' : 'inherit'};">${rs(m.cash)}</b></td><td>${rs(m.upi)}</td><td>${rs(m.got)}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="hint">No money recorded yet.</td></tr>';
+}
+async function ncStatus(id, status){
+  const r = ncRows.find(x => x.id === id) || {};
+  let note = '';
+  if(status === 'rejected'){ note = prompt('Why is ' + (r.name || 'this connection') + ' rejected? (the delivery man will see this)', ''); if(note === null) return; }
+  if(status === 'done' && !confirm('Mark ' + (r.name || 'this connection') + ' as Done? The customer will be added to Saved customers.')) return;
+  try{ await api('/api/nc/' + id + '/status', {method:'POST', body:{status, note}}); toast('Updated'); loadNcAll(); }
+  catch(e){ toast('Could not update: ' + e.message); }
+}
+async function ncCash(id, received){
+  try{ await api('/api/nc/' + id + '/cash', {method:'POST', body:{received}}); loadNc(); }
+  catch(e){ toast('Could not save: ' + e.message); }
+}
+async function ncShowPhotos(id){
+  const box = document.getElementById('ncPhotoImgs');
+  box.innerHTML = '<div style="color:#fff;">Loading…</div>';
+  document.getElementById('ncPhotoBox').style.display = 'flex';
+  const urls = [];
+  for(const side of ['front', 'back']){
+    try{
+      const r = await fetch('/api/nc/' + id + '/photo?side=' + side, {headers:{'x-gasdost-key': adminKey()}, cache:'no-store'});
+      if(r.ok) urls.push([side, URL.createObjectURL(await r.blob())]);
+    }catch(e){}
+  }
+  box.innerHTML = urls.length ? urls.map(([side, u]) => `<figure style="margin:0;text-align:center;color:#fff;"><img src="${u}" style="max-width:min(90vw,520px);max-height:70vh;border-radius:8px;background:#fff;"><figcaption>${side === 'front' ? 'Front' : 'Back'}</figcaption></figure>`).join('')
+    : '<div style="color:#fff;">No photos.</div>';
+  box.dataset.urls = JSON.stringify(urls.map(x => x[1]));
+}
+function ncClosePhotos(){
+  const box = document.getElementById('ncPhotoImgs');
+  try{ JSON.parse(box.dataset.urls || '[]').forEach(u => URL.revokeObjectURL(u)); }catch(e){}
+  box.innerHTML = ''; document.getElementById('ncPhotoBox').style.display = 'none';
+}
+async function ncExport(){
+  if(typeof XLSX === 'undefined'){ toast('Excel tool still loading — try again in a moment'); return; }
+  const d = await api('/api/nc?limit=5000&status=' + encodeURIComponent(document.getElementById('ncStatus').value) + '&phone=' + encodeURIComponent(document.getElementById('ncWho').value));
+  const rows = [['Date', 'Delivery man', 'Customer', 'Mobile', 'Address', 'Dealership', 'Latitude', 'Longitude', 'Cylinder no.', 'Amount', 'Mode', 'Cash received', 'Aadhaar', 'Status', 'Note']]
+    .concat(d.list.map(r => [new Date(r.at).toLocaleString('en-IN'), r.man || ncManName(r.phone), r.name, r.mobile, r.address, r.dealer, r.lat ?? '', r.lng ?? '',
+      r.serial, r.amount, r.payMode, r.cashReceivedAt ? 'Yes' : '', r.aadhaar, r.status, r.statusNote]));
+  const ws = XLSX.utils.aoa_to_sheet(rows), wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'New connections');
+  XLSX.writeFile(wb, 'gasdost_new_connections.xlsx');
+}
+
 function fillAssignList(){
   try{ fillHistoryWho(); loadDealers(); }catch(e){}
   const sel = document.getElementById('assignTo');

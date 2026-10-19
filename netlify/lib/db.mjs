@@ -960,3 +960,115 @@ export async function importOld(old) {
   }
   return { customers, locations, team };
 }
+
+/* ---------------- new connections (fiber cylinders) ---------------- */
+
+const NC_PHOTO_DAYS = 90;
+function ncOut(r, names = {}) {
+  return {
+    id: String(r.id), at: ms(r.at), phone: r.phone, man: r.man_name || names[r.phone] || "", name: r.name, mobile: r.mobile,
+    address: r.address, dealer: r.dealer, lat: r.lat, lng: r.lng, serial: r.serial, amount: Number(r.amount) || 0,
+    payMode: r.pay_mode, cashReceivedAt: ms(r.cash_received_at), aadhaar: r.aadhaar_last4 ? "XXXX XXXX " + r.aadhaar_last4 : "",
+    status: r.status, statusAt: ms(r.status_at), statusNote: r.status_note,
+    hasPhotos: !r.photos_deleted_at && Number(r.photo_count || 0) > 0,
+  };
+}
+// Stock with each delivery man: given − returned − used (pending + done).
+export async function ncStock() {
+  const given = await q`SELECT phone, COALESCE(sum(qty) FILTER (WHERE qty > 0), 0)::int AS given,
+                               COALESCE(-sum(qty) FILTER (WHERE qty < 0), 0)::int AS returned FROM nc_stock GROUP BY phone`;
+  const used = await q`SELECT phone, count(*)::int AS used FROM new_connections WHERE status <> 'rejected' GROUP BY phone`;
+  const names = await teamNames();
+  const map = {};
+  given.forEach((g) => { map[g.phone] = { phone: g.phone, given: g.given, returned: g.returned, used: 0 }; });
+  used.forEach((u) => { (map[u.phone] = map[u.phone] || { phone: u.phone, given: 0, returned: 0, used: 0 }).used = u.used; });
+  return Object.values(map).map((m) => ({ ...m, name: names[m.phone] || "", left: m.given - m.returned - m.used }))
+    .sort((a, b) => (a.name || a.phone).localeCompare(b.name || b.phone));
+}
+export async function ncStockFor(phone) {
+  return (await ncStock()).find((s) => s.phone === phone) || { phone, given: 0, returned: 0, used: 0, left: 0 };
+}
+export async function ncMoveStock(phone, qty, note = "") {
+  qty = Math.trunc(Number(qty) || 0);
+  if (!isPartner(phone) || !qty || Math.abs(qty) > 1000) return { error: "Choose a delivery man and a quantity." };
+  if (qty < 0 && (await ncStockFor(phone)).left + qty < 0) return { error: "He doesn't have that many cylinders left." };
+  await q`INSERT INTO nc_stock (phone, qty, note) VALUES (${phone}, ${qty}, ${clean(note, 120)})`;
+  return { ok: true, stock: await ncStockFor(phone) };
+}
+export async function ncStockLog(limit = 100) {
+  const rows = await q`SELECT * FROM nc_stock ORDER BY at DESC LIMIT ${limit}`;
+  const names = await teamNames();
+  return rows.map((r) => ({ at: ms(r.at), phone: r.phone, name: names[r.phone] || "", qty: r.qty, note: r.note }));
+}
+function photoBytes(dataUrl) {
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ""));
+  if (!m) return null;
+  const buf = Buffer.from(m[2], "base64");
+  return buf.length > 50 && buf.length <= 1500000 ? { mime: m[1], buf } : null;
+}
+export async function ncCreate(b, phone) {
+  const name = clean(b.name, 80), mobile = String(b.mobile || "").replace(/\D/g, "").slice(-10);
+  if (!name) return { error: "Enter the customer's name." };
+  if (!isMobile(mobile)) return { error: "Enter a valid 10-digit mobile number." };
+  const aad = String(b.aadhaarLast4 || "").replace(/\D/g, "");
+  if (aad && aad.length !== 4) return { error: "Aadhaar: type only the last 4 digits." };
+  const front = photoBytes(b.front), back = photoBytes(b.back);
+  if (!front) return { error: "Take a photo of the Aadhaar card (front)." };
+  if ((await ncStockFor(phone)).left <= 0) return { error: "You have no fiber cylinders left. Ask the office for stock." };
+  const lat = Number(b.lat), lng = Number(b.lng);
+  const okLoc = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat || lng);
+  const amount = Math.max(0, Math.min(100000, Math.round((Number(b.amount) || 0) * 100) / 100));
+  const mode = ["cash", "upi", "none"].includes(b.payMode) ? b.payMode : (amount ? "cash" : "none");
+  const [r] = await q`
+    INSERT INTO new_connections (phone, man_name, name, mobile, address, dealer, lat, lng, serial, amount, pay_mode, aadhaar_last4)
+    VALUES (${phone}, ${clean(b.manName, 40)}, ${name}, ${mobile}, ${clean(b.address, 300)}, ${clean(b.dealer, 80)},
+            ${okLoc ? lat : null}, ${okLoc ? lng : null}, ${clean(b.serial, 40)}, ${amount}, ${mode}, ${aad})
+    RETURNING id`;
+  await q`INSERT INTO nc_photos (conn_id, side, mime, data) VALUES (${r.id}, 'front', ${front.mime}, ${front.buf})`;
+  if (back) await q`INSERT INTO nc_photos (conn_id, side, mime, data) VALUES (${r.id}, 'back', ${back.mime}, ${back.buf})`;
+  return { ok: true, id: String(r.id), stock: await ncStockFor(phone) };
+}
+export async function ncList({ status = "", phone = "", text = "", limit = 300, from = null, to = null } = {}) {
+  await ncPurgePhotos();
+  const like = "%" + clean(text, 60).toLowerCase() + "%";
+  const rows = await q`
+    SELECT n.*, (SELECT count(*) FROM nc_photos p WHERE p.conn_id = n.id) AS photo_count
+    FROM new_connections n
+    WHERE (${status} = '' OR n.status = ${status}) AND (${phone} = '' OR n.phone = ${phone})
+      AND (lower(n.name) LIKE ${like} OR n.mobile LIKE ${like} OR lower(n.address) LIKE ${like} OR lower(n.serial) LIKE ${like})
+      AND (${from}::timestamptz IS NULL OR n.at >= ${from}::timestamptz) AND (${to}::timestamptz IS NULL OR n.at < ${to}::timestamptz)
+    ORDER BY n.at DESC LIMIT ${Math.max(1, Math.min(5000, limit | 0 || 300))}`;
+  const names = await teamNames();
+  return rows.map((r) => ncOut(r, names));
+}
+export async function ncPhoto(id, side) {
+  const [p] = await q`SELECT mime, data FROM nc_photos WHERE conn_id = ${id} AND side = ${side}`;
+  return p || null;
+}
+export async function ncSetStatus(id, status, note = "") {
+  if (!["pending", "done", "rejected"].includes(status)) return { error: "Bad status" };
+  const [n] = await q`UPDATE new_connections SET status = ${status}, status_at = now(), status_note = ${clean(note, 200)}
+                      WHERE id = ${id} RETURNING *`;
+  if (!n) return { error: "Not found" };
+  if (status === "done") {
+    // Becomes a normal saved customer, with the doorstep already pinned.
+    await upsertCustomers([{ no: n.mobile, name: n.name, address: n.address, dealer: n.dealer }]);
+    const [c] = (await q`SELECT no, dealer FROM customers WHERE left(no, 10) = ${n.mobile} AND deleted_at IS NULL`)
+      .filter((x) => dkey(x.dealer) === dkey(n.dealer)).concat([null]);
+    if (c && n.lat != null) await savePin({ no: c.no, lat: n.lat, lng: n.lng, via: "phone" });
+  }
+  return { ok: true };
+}
+export async function ncCash(id, received) {
+  await q`UPDATE new_connections SET cash_received_at = ${received ? new Date() : null} WHERE id = ${id}`;
+  return { ok: true };
+}
+// Aadhaar photos are removed 90 days after a connection is Done (or Rejected).
+export async function ncPurgePhotos() {
+  const old = await q`SELECT id FROM new_connections WHERE status IN ('done','rejected') AND photos_deleted_at IS NULL
+                      AND status_at < now() - make_interval(days => ${NC_PHOTO_DAYS})`;
+  for (const o of old) {
+    await q`DELETE FROM nc_photos WHERE conn_id = ${o.id}`;
+    await q`UPDATE new_connections SET photos_deleted_at = now() WHERE id = ${o.id}`;
+  }
+}

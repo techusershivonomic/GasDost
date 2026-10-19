@@ -69,8 +69,8 @@
   .card h2{font-size:15px;margin:0 0 12px;}
   .card h3{font-size:13px;color:var(--muted);margin:0 0 6px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;}
   label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px;font-weight:500;}
-  input[type=text]{width:100%;padding:13px 12px;border:1px solid var(--border);border-radius:9px;font-size:16px;letter-spacing:.5px;}
-  input[type=text]:focus{outline:2px solid var(--blue);border-color:var(--blue);}
+  input[type=text],input[type=tel],input[type=search],textarea{width:100%;padding:13px 12px;border:1px solid var(--border);border-radius:9px;font-size:16px;letter-spacing:.5px;font-family:inherit;}
+  input[type=text]:focus,input[type=tel]:focus,input[type=search]:focus,textarea:focus{outline:2px solid var(--blue);border-color:var(--blue);}
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 16px;border-radius:9px;border:none;font-size:15px;font-weight:600;cursor:pointer;width:100%;margin-top:10px;min-height:46px;}
   .btn-primary{background:var(--blue);color:#fff;}
   .btn-primary:hover{background:var(--blue-dark);}
@@ -125,6 +125,18 @@
   .next-btns .btn-call{background:#fff3e0;color:#b45f00;text-decoration:none;}
   .next-skip{display:block;margin:12px auto 0;background:none;border:none;color:var(--muted);font-size:14px;font-weight:700;cursor:pointer;padding:6px 12px;}
   .next-done{text-align:center;font-size:24px;font-weight:800;padding:18px 0 8px;color:var(--green);}
+  .nc-big{background:#7b1fa2;color:#fff;min-height:64px;font-size:19px;font-weight:800;border-radius:14px;margin:0 0 14px;}
+  .nc-big span{background:rgba(255,255,255,.22);border-radius:20px;padding:2px 10px;font-size:14px;}
+  .nc-stock{display:flex;align-items:baseline;gap:10px;margin-top:8px;} .nc-stock b{font-size:40px;color:#7b1fa2;} .nc-stock span{color:var(--muted);font-weight:700;}
+  .nc-photos{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;}
+  .nc-photo{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:110px;border:2px dashed var(--border);border-radius:12px;
+            font-size:30px;cursor:pointer;background-size:cover;background-position:center;color:var(--muted);}
+  .nc-photo span{font-size:14px;font-weight:700;} .nc-photo input{display:none;}
+  .nc-photo.done{border:3px solid var(--green);color:#fff;text-shadow:0 1px 3px #000;}
+  .nc-save{background:var(--green);color:#fff;min-height:64px;font-size:20px;font-weight:800;border-radius:14px;margin-top:16px;}
+  .nc-row{border-top:1px solid var(--border);padding:10px 0;font-size:14px;}
+  .nc-st{border-radius:20px;padding:2px 10px;font-size:12px;font-weight:800;}
+  .nc-st.pending{background:#fff3e0;color:#b45f00;} .nc-st.done{background:#e6f6ec;color:#137a40;} .nc-st.rejected{background:#fdecea;color:#b3261e;}
   .upload-note{display:flex;align-items:center;gap:9px;background:#f0f6ff;border:1px solid #cfe1ff;color:#0850c4;border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.45;margin-bottom:12px;font-weight:600;}
   .stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px;}
   .stat-tile{border-radius:12px;padding:14px 8px;text-align:center;}
@@ -263,6 +275,7 @@
       <div class="hint" id="buildTag" style="margin-top:10px;opacity:.75;"></div>
     </div>
 
+    <button class="btn nc-big" onclick="openNewConn()">🆕 New connection <span id="ncStockBadge"></span></button>
     <div class="card next-card" id="nextCard">
       <div class="next-head">🚚 Next delivery <span id="nextLeft"></span></div>
       <div id="nextBody"></div>
@@ -289,6 +302,53 @@
       <div class="hint">Each stop is the nearest one left to visit, measured straight-line — close enough in town. Google Maps handles the actual roads and turn-by-turn once you tap through.</div>
       <h3 style="margin:16px 0 6px;font-size:14px;">Stops in order</h3>
       <div id="routeList"></div>
+    </div>
+  </section>
+
+  <!-- ============ NEW CONNECTION (opened from the Dashboard) ============ -->
+  <section class="panel" id="newconn">
+    <button class="btn btn-ghost" style="margin:0 0 12px;" onclick="closeNewConn()">← Back to Dashboard</button>
+    <div class="card">
+      <div class="next-head" style="color:var(--text);">🛢️ My fiber cylinder stock</div>
+      <div class="nc-stock"><b id="ncLeft">–</b><span>cylinders with you</span></div>
+      <div class="hint" id="ncStockNote"></div>
+    </div>
+    <div class="card" id="ncFormCard">
+      <h2>🆕 New connection</h2>
+      <label for="ncName">Customer name</label>
+      <input type="text" id="ncName" maxlength="80" autocomplete="off" placeholder="e.g. Ramesh Patil">
+      <label for="ncMobile">Mobile number</label>
+      <input type="tel" id="ncMobile" maxlength="10" inputmode="numeric" placeholder="10-digit mobile">
+      <label for="ncAddress">Address</label>
+      <textarea id="ncAddress" rows="2" maxlength="300" placeholder="Flat, building, area"></textarea>
+      <label for="ncDealer">Dealership</label>
+      <select id="ncDealer" style="width:100%;padding:10px;border-radius:10px;"></select>
+      <button class="btn btn-ghost" id="ncLocBtn" onclick="ncUseLocation()">📍 Use my location (stand at the door)</button>
+      <div class="hint" id="ncLocNote"></div>
+
+      <label style="margin-top:14px;">Aadhaar card photo</label>
+      <div class="nc-photos">
+        <label class="nc-photo" id="ncFrontBox">📷<span>Front</span><input type="file" accept="image/*" capture="environment" onchange="ncTakePhoto(event,'front')"></label>
+        <label class="nc-photo" id="ncBackBox">📷<span>Back</span><input type="file" accept="image/*" capture="environment" onchange="ncTakePhoto(event,'back')"></label>
+      </div>
+      <label for="ncAadhaar">Aadhaar — last 4 digits only <span class="small">(optional)</span></label>
+      <input type="tel" id="ncAadhaar" maxlength="4" inputmode="numeric" placeholder="e.g. 4321">
+
+      <label for="ncSerial">Cylinder number <span class="small">(optional)</span></label>
+      <input type="text" id="ncSerial" maxlength="40" autocomplete="off" placeholder="Number on the cylinder">
+
+      <label for="ncAmount">Money collected (₹)</label>
+      <div style="display:flex;gap:8px;">
+        <input type="tel" id="ncAmount" maxlength="7" inputmode="numeric" placeholder="0" style="flex:1;">
+        <select id="ncPay" style="width:auto;padding:10px;border-radius:10px;"><option value="cash">💵 Cash</option><option value="upi">📱 UPI</option><option value="none">— None</option></select>
+      </div>
+
+      <button class="btn nc-save" onclick="ncSave()">✅ Save connection</button>
+      <div class="error" id="ncError"></div>
+    </div>
+    <div class="card">
+      <h2>My new connections</h2>
+      <div id="ncMine"><div class="hint">—</div></div>
     </div>
   </section>
 
@@ -475,7 +535,7 @@
    Shown on the Dashboard so there is never any doubt about which version a
    phone is actually running. If this doesn't match the latest, the device is
    on a stale copy and needs a proper reload. */
-const BUILD = 'Build 58 \u00b7 17 Oct 2026';
+const BUILD = 'Build 59 \u00b7 20 Oct 2026';
 window.addEventListener('load', ()=>{
   const el = document.getElementById('buildTag');
   if(el) el.textContent = BUILD;
@@ -1011,6 +1071,10 @@ function renderDashboardStats(){
 
   renderNextCard();
   try{ renderFind(); }catch(e){}
+  if(onlinePossible() && getLoggedInPhone() && Date.now() - (renderDashboardStats._nc || 0) > 120000){
+    renderDashboardStats._nc = Date.now();
+    staffApi('/api/nc/mine?me=' + getLoggedInPhone()).then(d => { const b = document.getElementById('ncStockBadge'); if(b) b.textContent = d.stock.left; }).catch(() => {});
+  }
   renderUploadNote();
 }
 
@@ -1093,6 +1157,107 @@ function renderFind(){
     </div>`;
   }).join('') + (found.length > 5 ? `<div class="next-meta" style="margin-top:8px;">+${found.length - 5} more — type more letters</div>` : '');
 }
+/* ---------------- New connection (fiber cylinder) ----------------
+   The delivery man fills the customer's details at the door, photographs the
+   Aadhaar card and saves. The office gives the stock and checks each one. */
+let ncPhotos = {front: null, back: null}, ncLoc = null, ncBusy = false;
+function openNewConn(){
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('newconn').classList.add('active');
+  window.scrollTo(0, 0);
+  if(!onlinePossible()){
+    document.getElementById('ncError').textContent = 'This phone is not connected to the office. Ask the office for the setup QR first.';
+  }
+  loadMyNewConn();
+}
+function closeNewConn(){ document.querySelector('[data-tab=dashboard]').click(); window.scrollTo(0, 0); }
+async function loadMyNewConn(){
+  if(!onlinePossible() || !getLoggedInPhone()) return;
+  try{
+    const d = await staffApi('/api/nc/mine?me=' + getLoggedInPhone());
+    document.getElementById('ncLeft').textContent = d.stock.left;
+    document.getElementById('ncStockNote').textContent = d.stock.left > 0 ? '' : 'No stock with you — ask the office to give fiber cylinders.';
+    const badge = document.getElementById('ncStockBadge'); if(badge) badge.textContent = d.stock.left;
+    const sel = document.getElementById('ncDealer'), was = sel.value;
+    const opts = (d.dealers || []);
+    sel.innerHTML = opts.map(x => `<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('') || '<option value="">—</option>';
+    if(was && opts.includes(was)) sel.value = was;
+    else { try{ const last = localStorage.getItem('gd_nc_dealer'); if(last && opts.includes(last)) sel.value = last; }catch(e){} }
+    const label = {pending:'⏳ Waiting for office', done:'✅ Done', rejected:'❌ Rejected'};
+    document.getElementById('ncMine').innerHTML = d.list.length ? d.list.map(r => `<div class="nc-row">
+        <div style="display:flex;justify-content:space-between;gap:8px;"><b>${escapeHtml(r.name)}</b><span class="nc-st ${r.status}">${label[r.status] || r.status}</span></div>
+        <div class="small">📞 ${escapeHtml(r.mobile)} · ${new Date(r.at).toLocaleDateString('en-IN', {day:'2-digit', month:'short'})}${r.amount ? ' · ₹' + r.amount : ''}${r.statusNote ? ' · ' + escapeHtml(r.statusNote) : ''}</div>
+      </div>`).join('') : '<div class="hint">None yet.</div>';
+  }catch(e){ document.getElementById('ncStockNote').textContent = 'Could not load — check the internet.'; }
+}
+function ncUseLocation(){
+  const note = document.getElementById('ncLocNote');
+  if(!navigator.geolocation){ note.textContent = 'This phone cannot give a location.'; return; }
+  note.textContent = 'Getting your location…';
+  const got = pos => {
+    ncLoc = {lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy};
+    note.innerHTML = '✅ Location saved' + (pos.coords.accuracy ? ' (±' + Math.round(pos.coords.accuracy) + ' m)' : '');
+    document.getElementById('ncLocBtn').style.borderColor = 'var(--green)';
+  };
+  const fail = () => { note.textContent = 'Could not get the location — turn on GPS and try again.'; };
+  // Exact GPS first; if the phone is slow, take its normal location instead.
+  navigator.geolocation.getCurrentPosition(got, err => {
+    if(err && err.code === 1){ fail(); return; }
+    navigator.geolocation.getCurrentPosition(got, fail, {enableHighAccuracy: false, timeout: 10000, maximumAge: 30000});
+  }, {enableHighAccuracy: true, timeout: 8000, maximumAge: 0});
+}
+// Photos are shrunk on the phone before sending (about 150 KB each).
+function ncTakePhoto(evt, side){
+  const f = evt.target.files && evt.target.files[0];
+  if(!f) return;
+  const img = new Image();
+  img.onload = () => {
+    const max = 1400, k = Math.min(1, max / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    ncPhotos[side] = c.toDataURL('image/jpeg', 0.72);
+    const box = document.getElementById(side === 'front' ? 'ncFrontBox' : 'ncBackBox');
+    box.style.backgroundImage = 'url(' + ncPhotos[side] + ')';
+    box.classList.add('done');
+    URL.revokeObjectURL(img.src);
+  };
+  img.src = URL.createObjectURL(f);
+  evt.target.value = '';
+}
+async function ncSave(){
+  if(ncBusy) return;
+  const err = document.getElementById('ncError'); err.textContent = '';
+  const v = id => (document.getElementById(id).value || '').trim();
+  const mobile = v('ncMobile').replace(/\D/g, '');
+  if(!v('ncName')){ err.textContent = 'Enter the customer\'s name.'; return; }
+  if(!isValidMobileNo(mobile)){ err.textContent = 'Enter a valid 10-digit mobile number.'; return; }
+  if(!ncPhotos.front){ err.textContent = 'Take a photo of the Aadhaar card (front).'; return; }
+  const aad = v('ncAadhaar').replace(/\D/g, '');
+  if(aad && aad.length !== 4){ err.textContent = 'Aadhaar: type only the last 4 digits.'; return; }
+  if(!ncLoc && !confirm('Location not taken. Save without the location?')) return;
+  ncBusy = true;
+  const btn = document.querySelector('.nc-save'); btn.disabled = true; btn.textContent = '⏳ Saving…';
+  try{
+    const d = await staffApi('/api/nc', {method:'POST', body:{
+      me: getLoggedInPhone(), manName: localStorage.getItem(LOGIN_NAME_KEY) || '',
+      name: v('ncName'), mobile, address: v('ncAddress'), dealer: v('ncDealer'),
+      lat: ncLoc ? ncLoc.lat : null, lng: ncLoc ? ncLoc.lng : null,
+      serial: v('ncSerial'), amount: Number(v('ncAmount').replace(/[^\d.]/g, '')) || 0, payMode: v('ncPay'),
+      aadhaarLast4: aad, front: ncPhotos.front, back: ncPhotos.back }});
+    if(d.error){ err.textContent = d.error; return; }
+    try{ localStorage.setItem('gd_nc_dealer', v('ncDealer')); }catch(e){}
+    ['ncName','ncMobile','ncAddress','ncAadhaar','ncSerial','ncAmount'].forEach(id => document.getElementById(id).value = '');
+    ncPhotos = {front: null, back: null}; ncLoc = null;
+    ['ncFrontBox','ncBackBox'].forEach(id => { const b = document.getElementById(id); b.style.backgroundImage = ''; b.classList.remove('done'); });
+    document.getElementById('ncLocNote').textContent = ''; document.getElementById('ncLocBtn').style.borderColor = '';
+    toast('✅ New connection saved');
+    window.scrollTo(0, 0);
+    loadMyNewConn();
+  }catch(e){ err.textContent = 'Could not save: ' + e.message + ' — check the internet and try again.'; }
+  finally{ ncBusy = false; btn.disabled = false; btn.textContent = '✅ Save connection'; }
+}
+
 function skipNext(no){
   nextSkipped.add(no);
   // Once everyone has been skipped, start the circle again.
