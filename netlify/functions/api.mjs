@@ -138,7 +138,7 @@ export default async (req) => {
         if (!me) return json({ error: "Log in on this phone first." }, 400);
         if (m === "GET" && id === "mine") {
           const list = await ncList({ phone: me, limit: 30 });
-          return json({ stock: await ncStockFor(me), dealers: await listDealers(), list: list.map(({ aadhaar, hasPhotos, ...r }) => r) });
+          return json({ stock: await ncStockFor(me), dealers: await listDealers(), list: list.map(({ aadhaar, hasPhotos, photos, ...r }) => r) });
         }
         if (m === "POST" && !id) return json(await ncCreate(body, me));
         return adminOnly();
@@ -148,7 +148,8 @@ export default async (req) => {
       if (m === "GET" && !id) return json({ list: await ncList({ status: p.get("status") || "", phone: p.get("phone") || "",
         text: p.get("q") || "", limit: +p.get("limit") || 300, from: p.get("from") || null, to: p.get("to") || null }) });
       if (m === "GET" && nid && parts2 === "photo") {
-        const ph = await ncPhoto(nid, p.get("side") === "back" ? "back" : "front");
+        const side = ["front", "back", "live", "photo"].includes(p.get("side")) ? p.get("side") : "front";
+        const ph = await ncPhoto(nid, side);
         if (!ph) return json({ error: "No photo" }, 404);
         return new Response(ph.data, { headers: { "content-type": ph.mime, "cache-control": "no-store, private" } });
       }

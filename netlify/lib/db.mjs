@@ -971,6 +971,7 @@ function ncOut(r, names = {}) {
     payMode: r.pay_mode, cashReceivedAt: ms(r.cash_received_at), aadhaar: r.aadhaar_last4 ? "XXXX XXXX " + r.aadhaar_last4 : "",
     status: r.status, statusAt: ms(r.status_at), statusNote: r.status_note,
     hasPhotos: !r.photos_deleted_at && Number(r.photo_count || 0) > 0,
+    photos: !r.photos_deleted_at && r.photo_sides ? String(r.photo_sides).split(",") : [],
   };
 }
 // Stock with each delivery man: given − returned − used (pending + done).
@@ -1014,6 +1015,8 @@ export async function ncCreate(b, phone) {
   if (aad && aad.length !== 4) return { error: "Aadhaar: type only the last 4 digits." };
   const front = photoBytes(b.front), back = photoBytes(b.back);
   if (!front) return { error: "Take a photo of the Aadhaar card (front)." };
+  if (!back) return { error: "Take a photo of the Aadhaar card (back)." };
+  const live = photoBytes(b.live), photo = photoBytes(b.photo);
   if ((await ncStockFor(phone)).left <= 0) return { error: "You have no fiber cylinders left. Ask the office for stock." };
   const lat = Number(b.lat), lng = Number(b.lng);
   const okLoc = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat || lng);
@@ -1025,14 +1028,17 @@ export async function ncCreate(b, phone) {
             ${okLoc ? lat : null}, ${okLoc ? lng : null}, ${clean(b.serial, 40)}, ${amount}, ${mode}, ${aad})
     RETURNING id`;
   await q`INSERT INTO nc_photos (conn_id, side, mime, data) VALUES (${r.id}, 'front', ${front.mime}, ${front.buf})`;
-  if (back) await q`INSERT INTO nc_photos (conn_id, side, mime, data) VALUES (${r.id}, 'back', ${back.mime}, ${back.buf})`;
+  await q`INSERT INTO nc_photos (conn_id, side, mime, data) VALUES (${r.id}, 'back', ${back.mime}, ${back.buf})`;
+  if (live) await q`INSERT INTO nc_photos (conn_id, side, mime, data) VALUES (${r.id}, 'live', ${live.mime}, ${live.buf})`;
+  if (photo) await q`INSERT INTO nc_photos (conn_id, side, mime, data) VALUES (${r.id}, 'photo', ${photo.mime}, ${photo.buf})`;
   return { ok: true, id: String(r.id), stock: await ncStockFor(phone) };
 }
 export async function ncList({ status = "", phone = "", text = "", limit = 300, from = null, to = null } = {}) {
   await ncPurgePhotos();
   const like = "%" + clean(text, 60).toLowerCase() + "%";
   const rows = await q`
-    SELECT n.*, (SELECT count(*) FROM nc_photos p WHERE p.conn_id = n.id) AS photo_count
+    SELECT n.*, (SELECT count(*) FROM nc_photos p WHERE p.conn_id = n.id) AS photo_count,
+           (SELECT string_agg(side, ',') FROM nc_photos p WHERE p.conn_id = n.id) AS photo_sides
     FROM new_connections n
     WHERE (${status} = '' OR n.status = ${status}) AND (${phone} = '' OR n.phone = ${phone})
       AND (lower(n.name) LIKE ${like} OR n.mobile LIKE ${like} OR lower(n.address) LIKE ${like} OR lower(n.serial) LIKE ${like})

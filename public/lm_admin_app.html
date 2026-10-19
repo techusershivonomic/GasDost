@@ -1459,7 +1459,7 @@ function renderNc(){
       <td>${esc(r.serial || '—')}</td>
       <td style="white-space:nowrap;">${r.amount ? '₹' + r.amount.toLocaleString('en-IN') + ' · ' + (r.payMode === 'upi' ? 'UPI' : 'Cash') : '—'}
         ${r.amount && r.payMode === 'cash' ? `<br><label style="font-weight:600;cursor:pointer;"><input type="checkbox" ${r.cashReceivedAt ? 'checked' : ''} onchange="ncCash('${r.id}', this.checked)"> Received</label>` : ''}</td>
-      <td style="white-space:nowrap;">${esc(r.aadhaar || '—')}${r.hasPhotos ? `<br><button class="send-btn again" onclick="ncShowPhotos('${r.id}')">🪪 View photos</button>` : '<br><span class="hint">photos deleted</span>'}</td>
+      <td style="white-space:nowrap;">${esc(r.aadhaar || '—')}${r.hasPhotos ? `<br><button class="send-btn again" onclick="ncShowPhotos('${r.id}')">🪪 View photos (${(r.photos || []).length})</button>` : '<br><span class="hint">photos deleted</span>'}</td>
       <td style="white-space:nowrap;"><b>${pill[r.status] || esc(r.status)}</b>${r.statusNote ? '<br><span class="hint">' + esc(r.statusNote) + '</span>' : ''}<br>
         ${r.status !== 'done' ? `<button class="send-btn todo" onclick="ncStatus('${r.id}','done')">✅ Done</button>` : ''}
         ${r.status !== 'rejected' ? `<button class="send-btn again" style="color:#d33;" onclick="ncStatus('${r.id}','rejected')">❌ Reject</button>` : ''}
@@ -1496,13 +1496,14 @@ async function ncShowPhotos(id){
   box.innerHTML = '<div style="color:#fff;">Loading…</div>';
   document.getElementById('ncPhotoBox').style.display = 'flex';
   const urls = [];
-  for(const side of ['front', 'back']){
+  const row = ncRows.find(x => x.id === id) || {};
+  for(const side of (row.photos && row.photos.length ? ['live', 'photo', 'front', 'back'].filter(x => row.photos.includes(x)) : ['front', 'back'])){
     try{
       const r = await fetch('/api/nc/' + id + '/photo?side=' + side, {headers:{'x-gasdost-key': adminKey()}, cache:'no-store'});
       if(r.ok) urls.push([side, URL.createObjectURL(await r.blob())]);
     }catch(e){}
   }
-  box.innerHTML = urls.length ? urls.map(([side, u]) => `<figure style="margin:0;text-align:center;color:#fff;"><img src="${u}" style="max-width:min(90vw,520px);max-height:70vh;border-radius:8px;background:#fff;"><figcaption>${side === 'front' ? 'Front' : 'Back'}</figcaption></figure>`).join('')
+  box.innerHTML = urls.length ? urls.map(([side, u]) => `<figure style="margin:0;text-align:center;color:#fff;"><img src="${u}" style="max-width:min(44vw,460px);max-height:38vh;border-radius:8px;background:#fff;"><figcaption>${({front:'Aadhaar front', back:'Aadhaar back', live:'Live photo', photo:'Customer photo'})[side]}</figcaption></figure>`).join('')
     : '<div style="color:#fff;">No photos.</div>';
   box.dataset.urls = JSON.stringify(urls.map(x => x[1]));
 }

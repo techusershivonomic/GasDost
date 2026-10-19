@@ -129,9 +129,12 @@
   .nc-big span{background:rgba(255,255,255,.22);border-radius:20px;padding:2px 10px;font-size:14px;}
   .nc-stock{display:flex;align-items:baseline;gap:10px;margin-top:8px;} .nc-stock b{font-size:40px;color:#7b1fa2;} .nc-stock span{color:var(--muted);font-weight:700;}
   .nc-photos{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;}
-  .nc-photo{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:110px;border:2px dashed var(--border);border-radius:12px;
-            font-size:30px;cursor:pointer;background-size:cover;background-position:center;color:var(--muted);}
-  .nc-photo span{font-size:14px;font-weight:700;} .nc-photo input{display:none;}
+  .nc-photo{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:130px;border:2px dashed var(--border);border-radius:12px;
+            background-size:cover;background-position:center;color:var(--muted);padding:8px;}
+  .nc-ph-ico{font-size:28px;} .nc-photo span{font-size:14px;font-weight:700;}
+  .nc-ph-btns{display:flex;gap:8px;margin-top:4px;}
+  .nc-ph-btns label{background:#fff;border:1px solid var(--border);border-radius:10px;font-size:22px;padding:6px 14px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.12);}
+  .nc-ph-btns input{display:none;}
   .nc-photo.done{border:3px solid var(--green);color:#fff;text-shadow:0 1px 3px #000;}
   .nc-save{background:var(--green);color:#fff;min-height:64px;font-size:20px;font-weight:800;border-radius:14px;margin-top:16px;}
   .nc-row{border-top:1px solid var(--border);padding:10px 0;font-size:14px;}
@@ -319,18 +322,26 @@
       <input type="text" id="ncName" maxlength="80" autocomplete="off" placeholder="e.g. Ramesh Patil">
       <label for="ncMobile">Mobile number</label>
       <input type="tel" id="ncMobile" maxlength="10" inputmode="numeric" placeholder="10-digit mobile">
-      <label for="ncAddress">Address</label>
-      <textarea id="ncAddress" rows="2" maxlength="300" placeholder="Flat, building, area"></textarea>
       <label for="ncDealer">Dealership</label>
       <select id="ncDealer" style="width:100%;padding:10px;border-radius:10px;"></select>
       <button class="btn btn-ghost" id="ncLocBtn" onclick="ncUseLocation()">📍 Use my location (stand at the door)</button>
       <div class="hint" id="ncLocNote"></div>
 
-      <label style="margin-top:14px;">Aadhaar card photo</label>
+      <label style="margin-top:14px;">Aadhaar card photo <span style="color:#d33;">*</span></label>
       <div class="nc-photos">
-        <label class="nc-photo" id="ncFrontBox">📷<span>Front</span><input type="file" accept="image/*" capture="environment" onchange="ncTakePhoto(event,'front')"></label>
-        <label class="nc-photo" id="ncBackBox">📷<span>Back</span><input type="file" accept="image/*" capture="environment" onchange="ncTakePhoto(event,'back')"></label>
+        <div class="nc-photo" id="ncFrontBox"><div class="nc-ph-ico">🪪</div><span>Front</span>
+          <div class="nc-ph-btns"><label>📷<input type="file" accept="image/*" capture="environment" onchange="ncTakePhoto(event,'front')"></label><label>🖼️<input type="file" accept="image/*" onchange="ncTakePhoto(event,'front')"></label></div></div>
+        <div class="nc-photo" id="ncBackBox"><div class="nc-ph-ico">🪪</div><span>Back</span>
+          <div class="nc-ph-btns"><label>📷<input type="file" accept="image/*" capture="environment" onchange="ncTakePhoto(event,'back')"></label><label>🖼️<input type="file" accept="image/*" onchange="ncTakePhoto(event,'back')"></label></div></div>
       </div>
+      <label style="margin-top:14px;">Customer photo</label>
+      <div class="nc-photos">
+        <div class="nc-photo" id="ncLiveBox"><div class="nc-ph-ico">🤳</div><span>Live photo</span>
+          <div class="nc-ph-btns"><label>📷<input type="file" accept="image/*" capture="user" onchange="ncTakePhoto(event,'live')"></label></div></div>
+        <div class="nc-photo" id="ncPhotoBox"><div class="nc-ph-ico">👤</div><span>Customer photo</span>
+          <div class="nc-ph-btns"><label>📷<input type="file" accept="image/*" capture="environment" onchange="ncTakePhoto(event,'photo')"></label><label>🖼️<input type="file" accept="image/*" onchange="ncTakePhoto(event,'photo')"></label></div></div>
+      </div>
+      <div class="hint">📷 = take with camera · 🖼️ = choose from gallery. The live photo is taken with the camera at the door.</div>
       <label for="ncAadhaar">Aadhaar — last 4 digits only <span class="small">(optional)</span></label>
       <input type="tel" id="ncAadhaar" maxlength="4" inputmode="numeric" placeholder="e.g. 4321">
 
@@ -535,7 +546,7 @@
    Shown on the Dashboard so there is never any doubt about which version a
    phone is actually running. If this doesn't match the latest, the device is
    on a stale copy and needs a proper reload. */
-const BUILD = 'Build 59 \u00b7 20 Oct 2026';
+const BUILD = 'Build 60 \u00b7 20 Oct 2026';
 window.addEventListener('load', ()=>{
   const el = document.getElementById('buildTag');
   if(el) el.textContent = BUILD;
@@ -1160,7 +1171,8 @@ function renderFind(){
 /* ---------------- New connection (fiber cylinder) ----------------
    The delivery man fills the customer's details at the door, photographs the
    Aadhaar card and saves. The office gives the stock and checks each one. */
-let ncPhotos = {front: null, back: null}, ncLoc = null, ncBusy = false;
+let ncPhotos = {front: null, back: null, live: null, photo: null}, ncLoc = null, ncBusy = false;
+const NC_BOX = {front: 'ncFrontBox', back: 'ncBackBox', live: 'ncLiveBox', photo: 'ncPhotoBox'};
 function openNewConn(){
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('newconn').classList.add('active');
@@ -1217,7 +1229,7 @@ function ncTakePhoto(evt, side){
     c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
     ncPhotos[side] = c.toDataURL('image/jpeg', 0.72);
-    const box = document.getElementById(side === 'front' ? 'ncFrontBox' : 'ncBackBox');
+    const box = document.getElementById(NC_BOX[side]);
     box.style.backgroundImage = 'url(' + ncPhotos[side] + ')';
     box.classList.add('done');
     URL.revokeObjectURL(img.src);
@@ -1233,6 +1245,7 @@ async function ncSave(){
   if(!v('ncName')){ err.textContent = 'Enter the customer\'s name.'; return; }
   if(!isValidMobileNo(mobile)){ err.textContent = 'Enter a valid 10-digit mobile number.'; return; }
   if(!ncPhotos.front){ err.textContent = 'Take a photo of the Aadhaar card (front).'; return; }
+  if(!ncPhotos.back){ err.textContent = 'Take a photo of the Aadhaar card (back).'; return; }
   const aad = v('ncAadhaar').replace(/\D/g, '');
   if(aad && aad.length !== 4){ err.textContent = 'Aadhaar: type only the last 4 digits.'; return; }
   if(!ncLoc && !confirm('Location not taken. Save without the location?')) return;
@@ -1241,15 +1254,15 @@ async function ncSave(){
   try{
     const d = await staffApi('/api/nc', {method:'POST', body:{
       me: getLoggedInPhone(), manName: localStorage.getItem(LOGIN_NAME_KEY) || '',
-      name: v('ncName'), mobile, address: v('ncAddress'), dealer: v('ncDealer'),
+      name: v('ncName'), mobile, dealer: v('ncDealer'),
       lat: ncLoc ? ncLoc.lat : null, lng: ncLoc ? ncLoc.lng : null,
       serial: v('ncSerial'), amount: Number(v('ncAmount').replace(/[^\d.]/g, '')) || 0, payMode: v('ncPay'),
-      aadhaarLast4: aad, front: ncPhotos.front, back: ncPhotos.back }});
+      aadhaarLast4: aad, front: ncPhotos.front, back: ncPhotos.back, live: ncPhotos.live, photo: ncPhotos.photo }});
     if(d.error){ err.textContent = d.error; return; }
     try{ localStorage.setItem('gd_nc_dealer', v('ncDealer')); }catch(e){}
-    ['ncName','ncMobile','ncAddress','ncAadhaar','ncSerial','ncAmount'].forEach(id => document.getElementById(id).value = '');
-    ncPhotos = {front: null, back: null}; ncLoc = null;
-    ['ncFrontBox','ncBackBox'].forEach(id => { const b = document.getElementById(id); b.style.backgroundImage = ''; b.classList.remove('done'); });
+    ['ncName','ncMobile','ncAadhaar','ncSerial','ncAmount'].forEach(id => document.getElementById(id).value = '');
+    ncPhotos = {front: null, back: null, live: null, photo: null}; ncLoc = null;
+    Object.values(NC_BOX).forEach(id => { const b = document.getElementById(id); b.style.backgroundImage = ''; b.classList.remove('done'); });
     document.getElementById('ncLocNote').textContent = ''; document.getElementById('ncLocBtn').style.borderColor = '';
     toast('✅ New connection saved');
     window.scrollTo(0, 0);
