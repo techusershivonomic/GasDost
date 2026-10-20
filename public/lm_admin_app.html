@@ -1634,6 +1634,14 @@ function buildDeliveryStatusOnline(){
   return {rows, totals};
 }
 
+// The dealership the Delivery status page is showing ('' = all).
+function statusDealer(){
+  let od = '';
+  try{ od = localStorage.getItem('gd_office_dealer_v1') || ''; }catch(e){}
+  return od && !renderDealers.showAll ? od : '';
+}
+function setStatusShowAll(on){ renderDealers.showAll = on; refreshOnline(); renderDealers(); }
+
 // Per-dealership counts (online only).
 function renderDealers(){
   const wrap = document.getElementById('dealerWrap');
@@ -1648,10 +1656,10 @@ function renderDealers(){
   if(od && !renderDealers.showAll){
     const same = x => String(x || '').trim().toLowerCase() === od.trim().toLowerCase();
     list = list.filter(d => same(d.dealer));
-    note.innerHTML = 'Showing only <b>' + esc(od) + '</b> (🏪 This computer). <a href="#" onclick="renderDealers.showAll=true;renderDealers();return false;">Show all dealerships</a>';
+    note.innerHTML = 'Showing only <b>' + esc(od) + '</b> (🏪 This computer). <a href="#" onclick="setStatusShowAll(true);return false;">Show all dealerships</a>';
     note.style.display = 'block';
   } else if(od){
-    note.innerHTML = '<a href="#" onclick="renderDealers.showAll=false;renderDealers();return false;">Show only ' + esc(od) + '</a>';
+    note.innerHTML = '<a href="#" onclick="setStatusShowAll(false);return false;">Show only ' + esc(od) + '</a>';
     note.style.display = 'block';
   } else note.style.display = 'none';
   wrap.style.display = 'block';
@@ -1706,12 +1714,14 @@ async function resendLink(no){
 }
 async function showBookingsBehind(view, who, dealer){
   if(!isOnline()){ toast('Connect to the online database first'); return; }
+  const onlyDealer = dealer == null && statusDealer() ? statusDealer() : null;
   const card = document.getElementById('behindCard');
   behindNow = {view, who, dealer};
   const m = who && who !== 'unassigned' ? getTeam().find(x => x.phone === who) : null;
   const person = who === 'unassigned' ? 'Unassigned' : who === 'office' ? '🏢 With office' : who ? ((m && m.name) || ('+' + who)) : 'Everyone';
   const label = {pending:'Pending', waiting:'Waiting for location', delivered:'Delivered today', all:'All bookings'}[view];
-  document.getElementById('behindTitle').textContent = label + ' — ' + (dealer != null ? '🏪 ' + (dealer || 'No dealership') : person);
+  document.getElementById('behindTitle').textContent = label + ' — ' + (dealer != null ? '🏪 ' + (dealer || 'No dealership') : person + (onlyDealer ? ' · 🏪 ' + onlyDealer : ''));
+  if(onlyDealer) dealer = onlyDealer;
   document.getElementById('behindCount').textContent = 'Loading…';
   document.getElementById('behindBody').innerHTML = '';
   card.style.display = 'block';
@@ -2645,7 +2655,7 @@ async function refreshOnline(full){
   if(!isOnline()) return;
   try{
     if(full) await firstSync();
-    serverStatus = await api('/api/status');
+    serverStatus = await api('/api/status' + (statusDealer() ? '?dealer=' + encodeURIComponent(statusDealer()) : ''));
     serverTeam = serverStatus.team || [];
     renderTeam();
     fillAssignList();
@@ -3278,7 +3288,7 @@ function setOfficeDealer(d){
     applyOfficeDealer(id);
   });
   toast('🏪 This computer: ' + (d || 'All dealerships'));
-  try{ renderDealers.showAll = false; renderDealers(); }catch(e){}
+  try{ renderDealers.showAll = false; renderDealers(); refreshOnline(); }catch(e){}
   try{ missingOffset = 0; loadMissing(); }catch(e){}
   try{ renderTracker(); }catch(e){}
   try{ if(document.getElementById('tab-newconn').classList.contains('active')) loadNc(); }catch(e){}

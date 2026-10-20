@@ -836,14 +836,16 @@ export async function dealerSummary() {
 }
 
 // Delivery status for the office: open bookings and today's deliveries per man.
-export async function statusSummary() {
+export async function statusSummary(dealer = "") {
+  const dl = dkey(dealer);
   const rows = await q`
-    SELECT COALESCE(CASE WHEN status = 'delivered' THEN COALESCE(delivered_by, assigned_to) ELSE assigned_to END, '') AS who,
-           count(*) FILTER (WHERE status <> 'delivered')::int AS pending,
-           count(*) FILTER (WHERE status = 'waiting')::int AS waiting,
-           count(*) FILTER (WHERE status = 'delivered')::int AS delivered
-    FROM bookings
-    WHERE NOT deleted AND (status <> 'delivered' OR delivered_at > date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')
+    SELECT COALESCE(CASE WHEN b.status = 'delivered' THEN COALESCE(b.delivered_by, b.assigned_to) ELSE b.assigned_to END, '') AS who,
+           count(*) FILTER (WHERE b.status <> 'delivered')::int AS pending,
+           count(*) FILTER (WHERE b.status = 'waiting')::int AS waiting,
+           count(*) FILTER (WHERE b.status = 'delivered')::int AS delivered
+    FROM bookings b LEFT JOIN customers c ON c.no = b.no
+    WHERE NOT b.deleted AND (b.status <> 'delivered' OR b.delivered_at > date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')
+      AND (${dl} = '' OR lower(trim(COALESCE(NULLIF(b.dealer, ''), c.dealer, ''))) = ${dl})
     GROUP BY 1`;
   return rows;
 }

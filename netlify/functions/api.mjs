@@ -239,7 +239,7 @@ export default async (req) => {
 
     if (what === "status" && m === "GET") {
       if (!isAdmin) return adminOnly();
-      const [rows, team, dealers, names] = await Promise.all([statusSummary(), listTeam(), dealerSummary(), teamNames()]);
+      const [rows, team, dealers, names] = await Promise.all([statusSummary(p.get("dealer") || ""), listTeam(), dealerSummary(), teamNames()]);
       return json({ rows, team, dealers, names });
     }
 
