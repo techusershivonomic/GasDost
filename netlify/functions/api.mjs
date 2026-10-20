@@ -69,6 +69,7 @@ export default async (req) => {
 
   try {
     if (what === "whoami" && m === "GET") return json({ role });
+    if (what === "dealers" && m === "GET") return json({ dealers: await listDealers() });
 
     if (what === "pair-code" && m === "POST") {
       if (!isAdmin) return adminOnly();
@@ -146,7 +147,7 @@ export default async (req) => {
       if (m === "GET" && id === "stock") return json({ stock: await ncStock(), log: await ncStockLog() });
       if (m === "POST" && id === "stock") return json(await ncMoveStock(body.phone, body.qty, body.note));
       if (m === "GET" && !id) return json({ list: await ncList({ status: p.get("status") || "", phone: p.get("phone") || "",
-        text: p.get("q") || "", limit: +p.get("limit") || 300, from: p.get("from") || null, to: p.get("to") || null }) });
+        text: p.get("q") || "", dealer: p.get("dealer") || "", limit: +p.get("limit") || 300, from: p.get("from") || null, to: p.get("to") || null }) });
       if (m === "GET" && nid && parts2 === "photo") {
         const side = ["front", "back", "live", "photo"].includes(p.get("side")) ? p.get("side") : "front";
         const ph = await ncPhoto(nid, side);

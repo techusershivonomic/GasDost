@@ -32,6 +32,7 @@
   header h1{font-size:17px;margin:0;font-weight:700;display:flex;align-items:center;gap:8px;}
   header .badge{background:rgba(255,255,255,.18);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500;}
   #whoBtn{display:none;background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
+  #dealerBtn{margin-left:6px;max-width:120px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;display:none;background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
   /* login screen — full-viewport overlay shown until the delivery man logs in with his mobile number.
      z-index is deliberately very high because Leaflet's internal map controls/popups use z-index up
      to 1000 of their own — this guarantees the login screen always wins regardless. */
@@ -127,6 +128,7 @@
   .next-done{text-align:center;font-size:24px;font-weight:800;padding:18px 0 8px;color:var(--green);}
   .nc-big{background:#7b1fa2;color:#fff;min-height:64px;font-size:19px;font-weight:800;border-radius:14px;margin:0 0 14px;}
   .nc-big span{background:rgba(255,255,255,.22);border-radius:20px;padding:2px 10px;font-size:14px;}
+  .nc-big span:empty,.next-head span:empty{display:none;}
   .nc-stock{display:flex;align-items:baseline;gap:10px;margin-top:8px;} .nc-stock b{font-size:40px;color:#7b1fa2;} .nc-stock span{color:var(--muted);font-weight:700;}
   .nc-photos{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;}
   .nc-photo{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:130px;border:2px dashed var(--border);border-radius:12px;
@@ -211,6 +213,15 @@
   </div>
 </div>
 
+<!-- Choose "my dealership" (from the header) -->
+<div id="dealerSheet" class="pair-scan" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+  <div class="pair-scan-card" style="text-align:left;">
+    <div style="font-weight:800;font-size:18px;margin-bottom:10px;">🏪 Your dealership</div>
+    <div id="dealerSheetList"></div>
+    <button class="btn btn-ghost" onclick="document.getElementById('dealerSheet').style.display='none'">Close</button>
+  </div>
+</div>
+
 <!-- ============ LOGIN ============ -->
 <div id="loginScreen" class="login-screen">
   <div class="login-card">
@@ -226,6 +237,10 @@
         <span class="login-cc">+91</span>
         <input type="text" id="loginPhoneInput" maxlength="10" inputmode="numeric" placeholder="10-digit mobile number">
       </div>
+      <div id="loginDealerWrap" style="display:none;margin-top:14px;">
+        <label for="loginDealer">Your dealership</label>
+        <select id="loginDealer" style="width:100%;padding:13px 12px;border-radius:9px;font-size:16px;"></select>
+      </div>
       <div class="error" id="loginError"></div>
     </div>
     <div id="connectBox"></div>
@@ -240,6 +255,7 @@
     <span data-lang-slot></span>
     <span id="netDot" title="" style="font-size:12px;color:#fff;opacity:.9;"></span>
     <button id="whoBtn" onclick="showLogoutConfirm()"></button>
+    <button id="dealerBtn" onclick="openDealerSheet()" style="display:none;"></button>
     <button id="installBtn" class="install-btn" onclick="installApp()" title="Install GasDost on this phone">⬇ Install</button>
   </div>
 </header>
@@ -546,7 +562,7 @@
    Shown on the Dashboard so there is never any doubt about which version a
    phone is actually running. If this doesn't match the latest, the device is
    on a stale copy and needs a proper reload. */
-const BUILD = 'Build 60 \u00b7 20 Oct 2026';
+const BUILD = 'Build 61 \u00b7 20 Oct 2026';
 window.addEventListener('load', ()=>{
   const el = document.getElementById('buildTag');
   if(el) el.textContent = BUILD;
@@ -606,6 +622,8 @@ function login(){
   errEl.textContent = '';
   if(name.length < 2){ errEl.textContent = 'Enter your name.'; document.getElementById('loginNameInput').focus(); return; }
   if(!/^\d{10}$/.test(raw)){ errEl.textContent = 'Enter a valid 10-digit mobile number.'; return; }
+  const dsel = document.getElementById('loginDealer');
+  if(document.getElementById('loginDealerWrap').style.display !== 'none') setMyDealer(dsel.value);
   localStorage.setItem(LOGIN_NAME_KEY, name);
   localStorage.setItem(LOGIN_KEY, '91'+raw);
   localStorage.setItem(LOGIN_AT_KEY, String(Date.now()));
@@ -613,6 +631,47 @@ function login(){
   showApp();
   toast('Logged in as '+name);
 }
+/* ---------------- My dealership ----------------
+   Chosen once at login (or from the 🏪 button at the top). Every dealership
+   choice in the app starts from it. Empty = works for both / any. */
+const MY_DEALER_KEY = 'gd_my_dealer_v1';
+let dealerNames = [];
+function myDealer(){ try{ return localStorage.getItem(MY_DEALER_KEY) || ''; }catch(e){ return ''; } }
+function setMyDealer(d){ try{ localStorage.setItem(MY_DEALER_KEY, d || ''); }catch(e){} renderDealerBtn(); }
+const sameDealer = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+// From a list of customers of different dealerships, the one of my dealership.
+function mineOf(list){ const d = myDealer(); return d ? (list.find(c => sameDealer(c.dealer, d)) || null) : null; }
+async function loadDealerNames(){
+  if(!onlinePossible()) return dealerNames;
+  try{ dealerNames = (await staffApi('/api/dealers')).dealers || []; }catch(e){}
+  return dealerNames;
+}
+async function fillLoginDealers(){
+  const wrap = document.getElementById('loginDealerWrap'), sel = document.getElementById('loginDealer');
+  const list = await loadDealerNames();
+  if(!list.length){ wrap.style.display = 'none'; return; }
+  sel.innerHTML = list.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('') +
+    '<option value="">Both / any dealership</option>';
+  let stored = null; try{ stored = localStorage.getItem(MY_DEALER_KEY); }catch(e){}
+  // First time: the first dealership is suggested; later his own choice is kept.
+  sel.value = stored === null ? list[0] : (list.find(d => sameDealer(d, stored)) || '');
+  wrap.style.display = 'block';
+}
+function renderDealerBtn(){
+  const b = document.getElementById('dealerBtn');
+  if(!b) return;
+  const d = myDealer();
+  b.style.display = getLoggedInPhone() && onlinePossible() ? 'inline-block' : 'none';
+  b.textContent = '🏪 ' + (d || 'Both');
+}
+async function openDealerSheet(){
+  const list = await loadDealerNames();
+  const cur = myDealer();
+  document.getElementById('dealerSheetList').innerHTML = list.concat(['']).map(d =>
+    `<button class="btn ${sameDealer(d, cur) ? 'btn-primary' : 'btn-ghost'}" style="margin:6px 0;" onclick="setMyDealer(this.dataset.d);document.getElementById('dealerSheet').style.display='none';toast('🏪 '+(this.dataset.d||'Both / any dealership'));try{loadMyNewConn()}catch(e){}" data-d="${escapeHtml(d)}">${d ? escapeHtml(d) : 'Both / any dealership'}</button>`).join('');
+  document.getElementById('dealerSheet').style.display = 'flex';
+}
+
 function showLogoutConfirm(){
   if(confirm('Log out and switch to a different name or mobile number?')){
     const me = getLoggedInPhone();
@@ -630,12 +689,15 @@ function showApp(){
     whoBtn.style.display = 'inline-block';
     whoBtn.textContent = '👤 ' + (getLoggedInName() || formatPhoneDisplay(phone));
   }
+  renderDealerBtn();
   heartbeat();
   if(typeof syncWithOffice === 'function') setTimeout(syncWithOffice, 300);
 }
 function showLogin(){
   document.getElementById('loginScreen').classList.remove('hidden');
   document.getElementById('whoBtn').style.display = 'none';
+  document.getElementById('dealerBtn').style.display = 'none';
+  fillLoginDealers();
   // Someone logged in before names were asked for keeps his number filled in,
   // so he only has to type his name.
   const phone = getLoggedInPhone();
@@ -1174,6 +1236,7 @@ function renderFind(){
 let ncPhotos = {front: null, back: null, live: null, photo: null}, ncLoc = null, ncBusy = false;
 const NC_BOX = {front: 'ncFrontBox', back: 'ncBackBox', live: 'ncLiveBox', photo: 'ncPhotoBox'};
 function openNewConn(){
+  loadMyNewConn._fresh = true;
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('newconn').classList.add('active');
   window.scrollTo(0, 0);
@@ -1193,8 +1256,11 @@ async function loadMyNewConn(){
     const sel = document.getElementById('ncDealer'), was = sel.value;
     const opts = (d.dealers || []);
     sel.innerHTML = opts.map(x => `<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('') || '<option value="">—</option>';
-    if(was && opts.includes(was)) sel.value = was;
+    const mine = opts.find(x => sameDealer(x, myDealer()));
+    if(was && opts.includes(was) && !loadMyNewConn._fresh) sel.value = was;
+    else if(mine) sel.value = mine;
     else { try{ const last = localStorage.getItem('gd_nc_dealer'); if(last && opts.includes(last)) sel.value = last; }catch(e){} }
+    loadMyNewConn._fresh = false;
     const label = {pending:'⏳ Waiting for office', done:'✅ Done', rejected:'❌ Rejected'};
     document.getElementById('ncMine').innerHTML = d.list.length ? d.list.map(r => `<div class="nc-row">
         <div style="display:flex;justify-content:space-between;gap:8px;"><b>${escapeHtml(r.name)}</b><span class="nc-st ${r.status}">${label[r.status] || r.status}</span></div>
@@ -1437,6 +1503,11 @@ async function manualNoTyped(){
   if(!isValidMobileNo(no)) return;
   const list = await officeCustomers(no);
   if(document.getElementById('manualNoInput').value.replace(/\D/g,'') !== no) return;
+  if(list.length > 1 && mineOf(list)){
+    manualChoices = list;
+    pickManualConnection(mineOf(list).no);
+    return;
+  }
   if(list.length > 1){
     manualChoices = list;
     found.innerHTML = connectionButtons(list.map(c => Object.assign({}, c, {booked: !!findConsumer(c.no)})), 'pickManualConnection');
@@ -1772,6 +1843,7 @@ function loadForSetLocation(){
   errEl.textContent = '';
   if(!isValidMobileNo(val)){ errEl.textContent='Enter a valid 10-digit mobile number.'; return; }
   const all = findConsumers(val);
+  if(all.length > 1 && mineOf(all)){ loadSetLocationKey(mineOf(all).no); return; }
   if(all.length > 1){ errEl.innerHTML = connectionButtons(all, 'loadSetLocationKey'); return; }
   loadSetLocationKey(all[0] ? all[0].no : val);
 }
@@ -1855,6 +1927,8 @@ function renderMissingCard(){
   if(card) card.style.display = onlinePossible() ? '' : 'none';
 }
 function openMissingList(){
+  const sel = document.getElementById('mmDealer');
+  if(myDealer() && sel.value === '__all'){ sel.innerHTML += `<option value="${escapeHtml(myDealer())}">${escapeHtml(myDealer())}</option>`; sel.value = myDealer(); }
   document.getElementById('mmBox').style.display = 'block';
   document.getElementById('mmOpenBtn').style.display = 'none';
   mmOffset = 0; loadMissingPhone(0);
@@ -1938,6 +2012,11 @@ async function lookupForConsumerTab(){
   here.forEach(c => opts.set(c.no, Object.assign({}, c, {booked: true})));
   office.forEach(k => { if(!opts.has(k.no)) opts.set(k.no, {no: k.no, name: k.name, address: k.address || '', dealer: k.dealer || '',
     phone: '91' + val, booking: 'BK-' + k.no, fromOffice: true}); });
+  if(opts.size > 1 && mineOf([...opts.values()])){
+    clChoices = [...opts.values()];
+    pickConsumerConnection(mineOf(clChoices).no);
+    return;
+  }
   if(opts.size > 1){
     clChoices = [...opts.values()];
     const box = document.getElementById('clNew');

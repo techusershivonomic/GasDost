@@ -1033,7 +1033,8 @@ export async function ncCreate(b, phone) {
   if (photo) await q`INSERT INTO nc_photos (conn_id, side, mime, data) VALUES (${r.id}, 'photo', ${photo.mime}, ${photo.buf})`;
   return { ok: true, id: String(r.id), stock: await ncStockFor(phone) };
 }
-export async function ncList({ status = "", phone = "", text = "", limit = 300, from = null, to = null } = {}) {
+export async function ncList({ status = "", phone = "", text = "", dealer = "", limit = 300, from = null, to = null } = {}) {
+  const dl = dkey(dealer);
   await ncPurgePhotos();
   const like = "%" + clean(text, 60).toLowerCase() + "%";
   const rows = await q`
@@ -1041,6 +1042,7 @@ export async function ncList({ status = "", phone = "", text = "", limit = 300, 
            (SELECT string_agg(side, ',') FROM nc_photos p WHERE p.conn_id = n.id) AS photo_sides
     FROM new_connections n
     WHERE (${status} = '' OR n.status = ${status}) AND (${phone} = '' OR n.phone = ${phone})
+      AND (${dl} = '' OR lower(trim(n.dealer)) = ${dl})
       AND (lower(n.name) LIKE ${like} OR n.mobile LIKE ${like} OR lower(n.address) LIKE ${like} OR lower(n.serial) LIKE ${like})
       AND (${from}::timestamptz IS NULL OR n.at >= ${from}::timestamptz) AND (${to}::timestamptz IS NULL OR n.at < ${to}::timestamptz)
     ORDER BY n.at DESC LIMIT ${Math.max(1, Math.min(5000, limit | 0 || 300))}`;

@@ -149,6 +149,8 @@
   <h1>⛽ GasDost — Admin</h1>
   <span class="badge">Desktop console</span>
   <span style="flex:1;"></span>
+  <label id="officeDealerWrap" style="display:none;align-items:center;gap:6px;color:#fff;font-size:12.5px;font-weight:600;margin-right:8px;" title="Dealership this computer works for. Every dealership filter starts from it.">🏪 This computer
+    <select id="officeDealer" onchange="setOfficeDealer(this.value)" style="padding:5px 8px;border-radius:8px;border:none;font-size:12.5px;max-width:200px;"><option value="">All dealerships</option></select></label>
   <span data-lang-slot></span>
   <button id="installBtn" class="install-btn" onclick="installApp()" title="Install GasDost Admin on this computer">⬇ Install</button>
   <button id="netBtn" class="badge" style="border:none;cursor:pointer;font-size:12.5px;" onclick="connectOnline()">⚪ Offline</button>
@@ -727,10 +729,11 @@
       <h2 style="margin:0;">🆕 New connections</h2>
       <button class="btn btn-ghost" style="width:auto;" onclick="ncExport()">⬇ Download Excel</button>
     </div>
-    <div class="form-row" style="grid-template-columns:2fr 1fr 1fr;margin-top:12px;">
+    <div class="form-row" style="grid-template-columns:2fr 1fr 1fr 1fr;margin-top:12px;">
       <div><label for="ncSearch">Find</label><input type="text" id="ncSearch" placeholder="Name, mobile, address or cylinder no." oninput="clearTimeout(ncTimer);ncTimer=setTimeout(loadNc,300)" autocomplete="off"></div>
       <div><label for="ncStatus">Status</label><select id="ncStatus" onchange="loadNc()"><option value="">All</option><option value="pending" selected>⏳ Pending</option><option value="done">✅ Done</option><option value="rejected">❌ Rejected</option></select></div>
       <div><label for="ncWho">Delivery man</label><select id="ncWho" onchange="loadNc()"><option value="">Everyone</option></select></div>
+      <div><label for="ncDealerF">Dealership</label><select id="ncDealerF" onchange="loadNc()"><option value="">All dealerships</option></select></div>
     </div>
     <p class="small">🔒 Aadhaar photos open only here and are deleted 90 days after a connection is marked Done or Rejected. When you mark one <b>✅ Done</b> (after entering it in the oil-company portal), the customer is added to Saved customers with the doorstep already pinned.</p>
     <div style="overflow-x:auto;">
@@ -1437,8 +1440,10 @@ async function ncMove(sign){
 async function loadNc(){
   try{
     const qv = document.getElementById('ncSearch').value.trim();
+    fillDealerSelect('ncDealerF', '');
     const d = await api('/api/nc?status=' + encodeURIComponent(document.getElementById('ncStatus').value) +
-      '&phone=' + encodeURIComponent(document.getElementById('ncWho').value) + '&q=' + encodeURIComponent(qv));
+      '&phone=' + encodeURIComponent(document.getElementById('ncWho').value) + '&q=' + encodeURIComponent(qv) +
+      '&dealer=' + encodeURIComponent(dealerPick('ncDealerF', '')));
     ncRows = d.list;
     renderNc();
     // Pending count on the tab, and the money table (from all connections).
@@ -1514,7 +1519,7 @@ function ncClosePhotos(){
 }
 async function ncExport(){
   if(typeof XLSX === 'undefined'){ toast('Excel tool still loading — try again in a moment'); return; }
-  const d = await api('/api/nc?limit=5000&status=' + encodeURIComponent(document.getElementById('ncStatus').value) + '&phone=' + encodeURIComponent(document.getElementById('ncWho').value));
+  const d = await api('/api/nc?limit=5000&status=' + encodeURIComponent(document.getElementById('ncStatus').value) + '&phone=' + encodeURIComponent(document.getElementById('ncWho').value) + '&dealer=' + encodeURIComponent(dealerPick('ncDealerF', '')));
   const rows = [['Date', 'Delivery man', 'Customer', 'Mobile', 'Address', 'Dealership', 'Latitude', 'Longitude', 'Cylinder no.', 'Amount', 'Mode', 'Cash received', 'Aadhaar', 'Status', 'Note']]
     .concat(d.list.map(r => [new Date(r.at).toLocaleString('en-IN'), r.man || ncManName(r.phone), r.name, r.mobile, r.address, r.dealer, r.lat ?? '', r.lng ?? '',
       r.serial, r.amount, r.payMode, r.cashReceivedAt ? 'Yes' : '', r.aadhaar, r.status, r.statusNote]));
@@ -1817,11 +1822,11 @@ async function loadMissing(){
   try{
     const q = (document.getElementById('missingSearch').value || '').trim();
     const dsel = document.getElementById('missingDealer');
-    const dv = dsel.value;
+    const dv = dealerPick('missingDealer', '__all');
     const d = await api('/api/missing?offset=' + missingOffset + '&limit=100&q=' + encodeURIComponent(q) + (dv !== '__all' ? '&dealer=' + encodeURIComponent(dv) : ''));
     dsel.innerHTML = '<option value="__all">All dealerships (' + d.all.toLocaleString('en-IN') + ')</option>' +
       (d.dealers || []).map(x => `<option value="${esc(x.dealer)}">${esc(x.dealer || 'No dealership')} (${x.n.toLocaleString('en-IN')})</option>`).join('');
-    dsel.value = [...dsel.options].some(o => o.value === dv) ? dv : '__all';
+    dsel.value = [...dsel.options].find(o => sameDealer(o.value, dv))?.value || '__all';
     // Keep the card while there is a "who filled" history to look at.
     let filledAny = false;
     try{ filledAny = (await api('/api/missing/filled?limit=1')).filled.length > 0; }catch(e){}
@@ -1933,6 +1938,7 @@ async function loadTracker(){
     trkData.rows.concat(trkData.saved).forEach(r => { if(r.dealer) names[r.dealer.toLowerCase()] = r.dealer; });
     sel.innerHTML = '<option value="">All dealerships</option>' + Object.values(names).sort().map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
     sel.value = keep;
+    applyOfficeDealer('trkDealer', '');
     renderTracker();
     if(trkListNow) showTrackerList(trkListNow.key, trkListNow.dealer, true);
   }catch(e){ /* next refresh */ }
@@ -2580,6 +2586,7 @@ async function connectOnline(ask){
     try{ localStorage.setItem(ADMIN_KEY_STORE, key); }catch(e){}
     setNet('on', '🟢 Online');
     await firstSync();
+    try{ dealersAt = 0; loadDealers(); }catch(e){}
     await refreshOnline();
     if(ask !== false) toast('Connected to the online database');
   }catch(e){
@@ -3208,6 +3215,64 @@ async function downloadHistory(){
 }
 // Dealership names for the filter (loaded once, refreshed every few minutes).
 let dealersAt = 0;
+/* ---------------- This computer's dealership ----------------
+   Chosen at the top. Every dealership filter starts from it until someone
+   changes that filter by hand. Empty = all dealerships. */
+const OFFICE_DEALER_KEY = 'gd_office_dealer_v1';
+let allDealers = [];
+const sameDealer = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+function officeDealer(){ try{ return localStorage.getItem(OFFICE_DEALER_KEY) || ''; }catch(e){ return ''; } }
+// The value a dealership filter should use right now.
+function dealerPick(id, allVal){
+  const sel = document.getElementById(id);
+  if(!sel) return allVal;
+  if(sel.dataset.touched || !officeDealer()) return sel.value;
+  return officeDealer();
+}
+// Set an untouched filter to this computer's dealership (adding it if missing).
+function applyOfficeDealer(id, allVal){
+  const sel = document.getElementById(id);
+  if(!sel || sel.dataset.touched) return;
+  const d = officeDealer();
+  if(!d){ return; }
+  let opt = [...sel.options].find(o => sameDealer(o.value, d));
+  if(!opt){ opt = new Option(d, d); sel.add(opt); }
+  sel.value = opt.value;
+}
+function fillDealerSelect(id, allVal){
+  const sel = document.getElementById(id);
+  if(!sel) return;
+  if(allDealers.length && sel.options.length <= 1){
+    sel.innerHTML = '<option value="">All dealerships</option>' + allDealers.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('');
+  }
+  applyOfficeDealer(id, allVal);
+}
+function fillOfficeDealer(){
+  const sel = document.getElementById('officeDealer');
+  if(!sel || !allDealers.length) return;
+  sel.innerHTML = '<option value="">All dealerships</option>' + allDealers.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('');
+  sel.value = allDealers.find(x => sameDealer(x, officeDealer())) || '';
+  document.getElementById('officeDealerWrap').style.display = 'flex';
+}
+function setOfficeDealer(d){
+  try{ localStorage.setItem(OFFICE_DEALER_KEY, d || ''); }catch(e){}
+  // Every filter follows the new choice again.
+  ['missingDealer','histDealer','trkDealer','ncDealerF'].forEach(id => {
+    const el = document.getElementById(id); if(!el) return;
+    delete el.dataset.touched;
+    el.value = el.querySelector('option[value="__all"]') ? '__all' : '';
+    applyOfficeDealer(id);
+  });
+  toast('🏪 This computer: ' + (d || 'All dealerships'));
+  try{ missingOffset = 0; loadMissing(); }catch(e){}
+  try{ renderTracker(); }catch(e){}
+  try{ if(document.getElementById('tab-newconn').classList.contains('active')) loadNc(); }catch(e){}
+}
+// A filter changed by hand stops following this computer's choice.
+document.addEventListener('change', e => {
+  if(e.isTrusted && ['missingDealer','histDealer','trkDealer','ncDealerF'].includes(e.target.id)) e.target.dataset.touched = '1';
+}, true);
+
 async function loadDealers(){
   if(!isOnline() || Date.now() - dealersAt < 180000) return;
   dealersAt = Date.now();
@@ -3216,6 +3281,9 @@ async function loadDealers(){
     const sel = document.getElementById('histDealer'); const keep = sel.value;
     sel.innerHTML = '<option value="">All dealerships</option>' + d.dealers.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('');
     sel.value = keep;
+    allDealers = d.dealers;
+    applyOfficeDealer('histDealer', '');
+    fillOfficeDealer();
   }catch(e){ dealersAt = 0; }
 }
 
