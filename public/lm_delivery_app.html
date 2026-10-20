@@ -124,6 +124,8 @@
   .next-btns .btn{margin:0;min-height:62px;font-size:19px;font-weight:800;border-radius:14px;}
   .next-btns .btn-done{grid-column:1 / -1;background:var(--green);color:#fff;min-height:70px;font-size:21px;}
   .next-btns .btn-call{background:#fff3e0;color:#b45f00;text-decoration:none;}
+  .refuse-btn{background:#fdecea;color:#c62828;border:2px solid #f3b4ae;min-height:54px;font-size:17px;font-weight:800;border-radius:14px;margin-top:10px;}
+  .refuse-btn:active{background:#f9d6d2;}
   .next-skip{display:block;margin:12px auto 0;background:none;border:none;color:var(--muted);font-size:14px;font-weight:700;cursor:pointer;padding:6px 12px;}
   .next-done{text-align:center;font-size:24px;font-weight:800;padding:18px 0 8px;color:var(--green);}
   .nc-big{background:#7b1fa2;color:#fff;min-height:64px;font-size:19px;font-weight:800;border-radius:14px;margin:0 0 14px;}
@@ -1248,10 +1250,8 @@ function renderNextCard(){
       <a class="btn btn-call" href="tel:+91${mob(c.no)}">📞 Call</a>
       <button class="btn btn-done" onclick="routeDelivered('${c.no}')">✅ Delivered</button>
     </div>
-    <div style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;">
-      ${list.length > 1 ? `<button class="next-skip" onclick="skipNext('${c.no}')">⏭ Next customer</button>` : ''}
-      ${onlinePossible() ? `<button class="next-skip" style="color:#d33;" onclick="openRefuse('${c.no}')">🚫 Customer refused / cancel</button>` : ''}
-    </div>`;
+    ${onlinePossible() ? `<button class="btn refuse-btn" onclick="openRefuse('${c.no}')">🚫 Customer refused / cancel</button>` : ''}
+    ${list.length > 1 ? `<button class="next-skip" onclick="skipNext('${c.no}')">⏭ Next customer</button>` : ''}`;
 }
 // Find customer: today's bookings by name or a few digits of the number.
 function renderFind(){
@@ -1277,7 +1277,7 @@ function renderFind(){
         <a class="btn btn-call" style="min-height:52px;font-size:16px;" href="tel:+91${mob(c.no)}">📞 Call</a>
         ${done ? '' : `<button class="btn" style="min-height:52px;font-size:16px;background:var(--green);color:#fff;" onclick="routeDelivered('${c.no}');renderFind()">✅ Done</button>`}
       </div>
-      ${done || !onlinePossible() ? '' : `<button class="next-skip" style="color:#d33;margin:6px 0 0;" onclick="openRefuse('${c.no}')">🚫 Customer refused / cancel</button>`}
+      ${done || !onlinePossible() ? '' : `<button class="btn refuse-btn" style="min-height:48px;font-size:15px;" onclick="openRefuse('${c.no}')">🚫 Customer refused / cancel</button>`}
     </div>`;
   }).join('') + (found.length > 5 ? `<div class="next-meta" style="margin-top:8px;">+${found.length - 5} more — type more letters</div>` : '');
 }
