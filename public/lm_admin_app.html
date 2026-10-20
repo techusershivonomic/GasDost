@@ -922,7 +922,9 @@ function loadRecipients(){
   const mode = document.getElementById('sendSource').value;
   renderSendDealerNote();
   if(mode === 'batch'){
-    recipients = batch.map(b => ({no:b.n, name:b.m, booking:b.b, address:b.a, dealer:b.g}));
+    const sd = sendDealer();
+    recipients = batch.filter(b => !sd || String(b.g || '').trim().toLowerCase() === sd.trim().toLowerCase())
+      .map(b => ({no:b.n, name:b.m, booking:b.b, address:b.a, dealer:b.g}));
   } else if(mode === 'customers'){
     recipients = getCustomers().map(c => ({no:c.no, name:c.name, booking:'', address:c.address, dealer:c.dealer}));
   } else {
