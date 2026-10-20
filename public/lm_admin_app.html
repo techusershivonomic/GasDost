@@ -537,6 +537,15 @@
     <div class="ok-box" id="custSummary" style="display:none;"></div>
   </div>
 
+  <div class="card" style="grid-column:1 / -1;" id="dupCard">
+    <div class="batch-header">
+      <h2 style="margin:0;">🧹 Duplicate customers</h2>
+      <button class="btn btn-ghost" style="width:auto;" onclick="checkDupes()">🔍 Check for duplicates</button>
+    </div>
+    <p class="small" style="margin-top:8px;">After uploading an oil-company report, the same person can appear twice — the old record (older mobile, no consumer no.) and the new one from the report. Same name + similar address is treated as the same person: the <b>old record moves to the 🗑 Recycle bin</b> (can be restored for 30 days). Same name with a <b>different address</b> is only listed for you to check.</p>
+    <div id="dupResult"></div>
+  </div>
+
   <div class="card" style="grid-column:1 / -1;display:none;" id="missingCard">
     <div class="batch-header">
       <h2 style="margin:0;">📵 Missing mobile number</h2>
@@ -3191,6 +3200,50 @@ function cancelPendingCustomers(){
 }
 
 /* ---- Safer deleting: Edit switch, Delete PIN, Recycle bin, history ---- */
+/* ---- Duplicate customers ---- */
+let dupData = null;
+function dupDealer(){ let od = ''; try{ od = localStorage.getItem('gd_office_dealer_v1') || ''; }catch(e){} return od; }
+async function checkDupes(){
+  const box = document.getElementById('dupResult');
+  if(!isOnline()){ box.innerHTML = '<div class="hint">Connect to the online database first.</div>'; return; }
+  box.innerHTML = '<div class="hint">⏳ Checking… this takes a few seconds.</div>';
+  try{
+    const dl = dupDealer();
+    dupData = await api('/api/customers/dupes' + (dl ? '?dealer=' + encodeURIComponent(dl) : ''));
+    const c = dupData.customers;
+    box.innerHTML = `<div class="warn-box" style="margin-top:10px;">
+        ${dl ? '🏪 <b>' + esc(dl) + '</b> · ' : ''}<b>${c.sure.count.toLocaleString('en-IN')}</b> duplicate customers found (same name, similar address)
+        · <b>${dupData.missing.sure.toLocaleString('en-IN')}</b> duplicates in the Missing mobile list
+        · <b>${c.unsure.count.toLocaleString('en-IN')}</b> same name but a different address (not touched)
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+          ${c.sure.count || dupData.missing.sure ? `<button class="btn btn-primary" style="width:auto;background:#d33;" onclick="cleanDupes()">🧹 Move ${c.sure.count.toLocaleString('en-IN')} old duplicates to Recycle bin</button>` : ''}
+          <button class="btn btn-ghost" style="width:auto;" onclick="exportDupes()">⬇ Download the list (Excel)</button>
+        </div></div>
+      <div style="overflow-x:auto;"><table style="margin-top:8px;"><thead><tr><th>Name</th><th>Old record (goes to bin)</th><th>Kept (from the report)</th><th>Address match</th></tr></thead><tbody>
+      ${c.sure.list.slice(0, 15).map(x => `<tr><td>${esc(x.name)}</td><td>${esc(fmtNo(x.oldMobile))}<br><span class="hint">${esc(x.oldAddress)}</span></td><td>${esc(fmtNo(x.keepMobile))} · ${esc(x.consumerNo || '')}<br><span class="hint">${esc(x.keepAddress)}</span></td><td>${x.match}%</td></tr>`).join('') || '<tr><td colspan="4" class="hint">No duplicates 🎉</td></tr>'}
+      </tbody></table></div>`;
+  }catch(e){ box.innerHTML = '<div class="error">Could not check: ' + esc(e.message) + '</div>'; }
+}
+async function cleanDupes(){
+  const c = dupData.customers.sure.count, dl = dupDealer();
+  const r = await askPin({title: '🧹 Remove ' + c.toLocaleString('en-IN') + ' duplicates?', text: 'The old records go to the Recycle bin (restore within 30 days). Customers from the report are kept.', button: 'Remove duplicates',
+    action: async pin => await api('/api/customers/dupes', {method:'POST', body:{pin, dealer: dl, by: pcName()}})});
+  if(!r || r === true) return;
+  toast('🧹 ' + r.moved.toLocaleString('en-IN') + ' duplicates moved to the Recycle bin');
+  document.getElementById('dupResult').innerHTML = `<div class="ok-box" style="margin-top:10px;">✅ ${r.moved.toLocaleString('en-IN')} old duplicates moved to the 🗑 Recycle bin · ${r.missingRemoved.toLocaleString('en-IN')} removed from the Missing mobile list · ${r.leftUnsure.toLocaleString('en-IN')} same-name/different-address left for you to check.</div>`;
+  custOffset = 0; renderCustomers(); loadMissing(); loadBin();
+}
+function exportDupes(){
+  if(typeof XLSX === 'undefined' || !dupData){ toast('Try again in a moment'); return; }
+  const row = (x, what) => [what, x.name, x.oldMobile, x.oldAddress, x.keepMobile, x.consumerNo || '', x.keepAddress, x.match + '%'];
+  const rows = [['Type', 'Name', 'Old mobile', 'Old address', 'Report mobile', 'Consumer no.', 'Report address', 'Address match']]
+    .concat(dupData.customers.sure.list.map(x => row(x, 'Duplicate (old goes to bin)')))
+    .concat(dupData.customers.unsure.list.map(x => row(x, 'Same name, different address — check')));
+  const ws = XLSX.utils.aoa_to_sheet(rows), wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Duplicates');
+  XLSX.writeFile(wb, 'gasdost_duplicates.xlsx');
+}
+
 function toggleCustEdit(){ document.body.classList.toggle('cust-edit'); }
 // Which office computer did it (asked once, kept on this computer).
 function pcName(){

@@ -1144,3 +1144,61 @@ export async function listCancellations({ from = null, to = null, dealer = "" } 
   return rows.map((r) => ({ at: ms(r.at), no: r.no, name: r.name, address: r.address, dealer: r.dealer, booking: r.booking,
     by: r.by, byName: r.by === "office" ? "Office" : (names[r.by] || "+" + r.by), reason: r.reason }));
 }
+
+/* ---------------- duplicate clean-up ----------------
+   After an oil-company report is uploaded, the same person can be there twice:
+   the old record (no consumer no., an older mobile) and the new one from the
+   report (with consumer no.). Same name + similar address = the same person:
+   the old record goes to the recycle bin. Same name but a different address is
+   only listed, never removed by itself. */
+const nameKey = (s) => String(s || "").toLowerCase().replace(/[^a-z]/g, "");
+const addrToks = (s) => new Set(String(s || "").toUpperCase().replace(/[^A-Z0-9 ]/g, " ").split(/\s+/).filter((t) => t.length >= 2));
+function addrSim(a, b) {
+  const A = addrToks(a), B = addrToks(b);
+  if (!A.size) return 0;
+  let n = 0; A.forEach((t) => { if (B.has(t)) n++; });
+  return n / A.size;
+}
+function pairUp(rows, idOf) {
+  const oldBy = new Map(), newBy = new Map();
+  rows.forEach((r) => {
+    const k = nameKey(r.name); if (!k) return;
+    const m = r.consumer_no ? newBy : oldBy;
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(r);
+  });
+  const sure = [], unsure = [];
+  oldBy.forEach((olds, k) => {
+    const news = newBy.get(k); if (!news) return;
+    olds.forEach((o) => {
+      let best = null, bs = 0;
+      news.forEach((n) => { const v = addrSim(o.address, n.address); if (v > bs) { bs = v; best = n; } });
+      (bs >= 0.5 ? sure : unsure).push({ old: idOf(o), oldMobile: mobileOf(o.no || ""), oldAddress: o.address, name: o.name,
+        keep: idOf(best || news[0]), keepMobile: mobileOf((best || news[0]).no || ""), keepAddress: (best || news[0]).address,
+        consumerNo: (best || news[0]).consumer_no, match: Math.round(bs * 100) });
+    });
+  });
+  return { sure, unsure };
+}
+export async function findDuplicates(dealer = "") {
+  const dl = dkey(dealer);
+  const cust = await q`SELECT no, name, address, consumer_no FROM customers
+                       WHERE deleted_at IS NULL AND (${dl} = '' OR lower(trim(dealer)) = ${dl})`;
+  const miss = await q`SELECT id, name, address, consumer_no FROM missing_mobile WHERE (${dl} = '' OR lower(trim(dealer)) = ${dl})`;
+  const c = pairUp(cust, (r) => r.no);
+  const m = pairUp(miss, (r) => String(r.id));
+  return { customers: c, missing: m };
+}
+export async function cleanDuplicates(dealer = "", by = "") {
+  const d = await findDuplicates(dealer);
+  const nos = [...new Set(d.customers.sure.map((x) => x.old))];
+  let moved = 0;
+  for (let i = 0; i < nos.length; i += 2000) {
+    const r = await q`UPDATE customers SET deleted_at = now(), deleted_by = ${by} WHERE no = ANY(${nos.slice(i, i + 2000)}) AND deleted_at IS NULL RETURNING no`;
+    moved += r.length;
+  }
+  if (moved) await logDelete("delete", moved, by, "Duplicates removed after an upload" + (dealer ? " · " + dealer : ""));
+  const ids = [...new Set(d.missing.sure.map((x) => Number(x.old)))];
+  if (ids.length) await q`DELETE FROM missing_mobile WHERE id = ANY(${ids}::bigint[])`;
+  return { moved, missingRemoved: ids.length, leftUnsure: d.customers.unsure.length };
+}

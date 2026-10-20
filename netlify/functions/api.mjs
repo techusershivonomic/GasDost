@@ -49,7 +49,7 @@
 
 import {
   roleOf, staffKey, json, isPartner, normKey,
-  searchCustomers, upsertCustomers, deleteCustomer, deleteCustomers, restoreCustomers, listBin, deleteLog, checkPin, changePin, addMissing, listMissing, fixMissing, missingFilled, deleteMissing, clearMissing, deleteAllCustomers, lookupCustomers, ensureTokens,
+  searchCustomers, upsertCustomers, deleteCustomer, deleteCustomers, findDuplicates, cleanDuplicates, restoreCustomers, listBin, deleteLog, checkPin, changePin, addMissing, listMissing, fixMissing, missingFilled, deleteMissing, clearMissing, deleteAllCustomers, lookupCustomers, ensureTokens,
   newBookings, applyOps, syncForPhone, listBookings, statusSummary, bookingsBehind, deliveryHistory, customerDeliveries, listDealers, dealerSummary, linkTracker, trackerList,
   listCancellations, ncStock, ncStockFor, ncMoveStock, ncStockLog, ncCreate, ncList, ncPhoto, ncSetStatus, ncCash,
   pingTeam, newPairCode, listTeam, deleteTeam, logoutTeam, removeTeam, teamNames, logoutAtFor, getMeta, setMeta, importOld,
@@ -120,6 +120,16 @@ export default async (req) => {
         return json({ restored: await restoreCustomers({ nos: Array.isArray(body.nos) ? body.nos : [], all: body.all === true }, by) });
       }
       if (id === "log" && m === "GET") return json({ log: await deleteLog() });
+      if (id === "dupes" && m === "GET") {
+        const d = await findDuplicates(p.get("dealer") || "");
+        const cut = (x) => ({ count: x.length, list: x.slice(0, 5000) });
+        return json({ customers: { sure: cut(d.customers.sure), unsure: cut(d.customers.unsure) }, missing: { sure: d.missing.sure.length } });
+      }
+      if (id === "dupes" && m === "POST") {
+        const pin = await checkPin(body.pin);
+        if (!pin.ok) return json({ error: pin.locked ? `Too many wrong PINs. Deleting is locked for ${pin.locked} minute(s).` : `Wrong Delete PIN.${pin.left ? ` ${pin.left} tries left.` : ""}`, pinError: true }, 403);
+        return json(await cleanDuplicates(body.dealer || "", by));
+      }
       if (id === "pin" && m === "POST") return json(await changePin(body.oldPin, body.newPin, by));
       if (id === "pin-check" && m === "POST") {
         const c = await checkPin(body.pin);
