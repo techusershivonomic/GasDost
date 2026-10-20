@@ -518,6 +518,7 @@
       <h2 style="margin:0;">Saved customers</h2>
       <span class="batch-count" id="custCount">0 customers</span>
     </div>
+    <div class="hint" id="custDealerNote" style="display:none;"></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;">
       <div style="flex:1;min-width:240px;">
         <label for="custSearch">Find a customer</label>
@@ -1556,6 +1557,22 @@ function menForDealer(m){
   if(!od || fillAssignList.showAll) return true;
   return m.dealer == null || m.dealer === '' || String(m.dealer).trim().toLowerCase() === od.trim().toLowerCase();
 }
+// Customers tab follows this computer's dealership ('' = all).
+function custDealer(){
+  let od = ''; try{ od = localStorage.getItem('gd_office_dealer_v1') || ''; }catch(e){}
+  return od && !renderCustomers.showAll ? od : '';
+}
+function custDealerArg(){ return custDealer() ? '&dealer=' + encodeURIComponent(custDealer()) : ''; }
+function renderCustDealerNote(){
+  const n = document.getElementById('custDealerNote'); if(!n) return;
+  let od = ''; try{ od = localStorage.getItem('gd_office_dealer_v1') || ''; }catch(e){}
+  if(!od || !isOnline()){ n.style.display = 'none'; return; }
+  n.style.display = 'block';
+  n.innerHTML = custDealer()
+    ? '🏪 Showing only <b>' + esc(od) + '</b> customers (🏪 This computer). <a href="#" onclick="renderCustomers.showAll=true;custOffset=0;renderCustomers();return false;">Show all dealerships</a>'
+    : '🏪 Showing all dealerships. <a href="#" onclick="renderCustomers.showAll=false;custOffset=0;renderCustomers();return false;">Show only ' + esc(od) + '</a>';
+}
+
 function fillAssignList(){
   try{ fillHistoryWho(); loadDealers(); }catch(e){}
   const sel = document.getElementById('assignTo');
@@ -1890,7 +1907,7 @@ async function loadMissing(){
     card.style.display = d.all || filledAny ? 'block' : 'none';
     document.getElementById('filledBox').style.display = filledAny ? '' : 'none';
     if(filledAny && document.getElementById('filledBox').open) loadFilled();
-    document.getElementById('missingCount').textContent = d.all.toLocaleString('en-IN') + ' waiting for a mobile number';
+    document.getElementById('missingCount').textContent = (dv !== '__all' && dv ? ((d.dealers || []).find(x => sameDealer(x.dealer, dv)) || {n: 0}).n : d.all).toLocaleString('en-IN') + ' waiting for a mobile number' + (dv !== '__all' && dv ? ' · 🏪 ' + dv : '');
     missingRows = d.rows;
     const from = d.total ? missingOffset + 1 : 0, to = missingOffset + d.rows.length;
     document.getElementById('missingShowing').innerHTML = d.total
@@ -2795,7 +2812,7 @@ async function savePendingCustomers(){
       pendingCustomers = null; pendingMissing = [];
       document.getElementById('custPending').style.display = 'none';
       custOffset = 0;
-      const t = await api('/api/customers?limit=1');
+      const t = await api('/api/customers?limit=1' + custDealerArg());
       custTotalAll = t.total;
       const sum = document.getElementById('custSummary');
       sum.style.display = 'block';
@@ -3050,7 +3067,8 @@ function renderCustomersOnline(){
     const my = ++custReq;
     try{
       // The full list isn't shown — only what you search for.
-      const d = await api('/api/customers?q=' + encodeURIComponent(qv) + '&offset=' + custOffset + '&limit=' + (qv ? 100 : 1));
+      renderCustDealerNote();
+      const d = await api('/api/customers?q=' + encodeURIComponent(qv) + '&offset=' + custOffset + '&limit=' + (qv ? 100 : 1) + custDealerArg());
       if(my !== custReq) return; // a newer search is already on its way
       if(!qv){
         custTotalAll = d.total;
@@ -3171,7 +3189,7 @@ async function exportCustomers(){
     list = [];
     try{
       for(let off = 0; ; off += 5000){
-        const d = await api('/api/customers?offset=' + off + '&limit=5000');
+        const d = await api('/api/customers?offset=' + off + '&limit=5000' + custDealerArg());
         list = list.concat(d.customers);
         toast('Preparing Excel… ' + list.length.toLocaleString() + ' of ' + d.total.toLocaleString());
         if(list.length >= d.total || !d.customers.length) break;
@@ -3324,6 +3342,7 @@ function setOfficeDealer(d){
   try{ renderDealers.showAll = false; renderDealers(); refreshOnline(); }catch(e){}
   try{ loadRecipients.showAll = false; if(document.getElementById('tab-send').classList.contains('active')) loadRecipients(); }catch(e){}
   try{ fillAssignList.showAll = false; fillAssignList(); }catch(e){}
+  try{ renderCustomers.showAll = false; custOffset = 0; renderCustomers(); }catch(e){}
   try{ missingOffset = 0; loadMissing(); }catch(e){}
   try{ renderTracker(); }catch(e){}
   try{ if(document.getElementById('tab-newconn').classList.contains('active')) loadNc(); }catch(e){}
