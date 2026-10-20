@@ -354,6 +354,23 @@
       </table>
     </div>
   </div>
+  <div class="card" style="grid-column:1 / -1;" id="cancelCard">
+    <div class="batch-header">
+      <h2 style="margin:0;">🚫 Cancelled bookings</h2>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <select id="cancelRange" onchange="loadCancellations()" style="width:auto;">
+          <option value="today">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option>
+        </select>
+        <button class="btn btn-ghost" style="width:auto;" onclick="exportCancellations()">⬇ Excel</button>
+      </div>
+    </div>
+    <p class="small" style="margin-top:8px;">Bookings cancelled by the office, or marked <b>Customer refused</b> by a delivery man at the door — with the reason.</p>
+    <div class="hint" id="cancelCount"></div>
+    <div style="overflow-x:auto;"><table>
+      <thead><tr><th>When</th><th>Customer</th><th>Dealership</th><th>Cancelled by</th><th>Reason</th></tr></thead>
+      <tbody id="cancelBody"></tbody>
+    </table></div>
+  </div>
 </section>
 
 <!-- ============ BOOKINGS ============ -->
@@ -777,7 +794,7 @@ function switchTab(tab){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
-  if(tab==='status') renderTeam(); // pull the newest figures whenever this tab is opened
+  if(tab==='status'){ renderTeam(); loadCancellations(); } // pull the newest figures whenever this tab is opened
   if(tab==='send') loadRecipients();
   if(tab==='customers'){ renderCustomers(); loadMissing(); loadBin(); }
   if(tab==='bookings'){ renderBookingSearch(); fillAssignList(); }
@@ -1573,6 +1590,39 @@ function renderCustDealerNote(){
     : '🏪 Showing all dealerships. <a href="#" onclick="renderCustomers.showAll=false;custOffset=0;renderCustomers();return false;">Show only ' + esc(od) + '</a>';
 }
 
+/* ---------------- Cancelled bookings ---------------- */
+let cancelRows = [];
+async function loadCancellations(){
+  if(!isOnline() || !document.getElementById('cancelBody')) return;
+  const r = document.getElementById('cancelRange').value;
+  const from = new Date(); from.setHours(0, 0, 0, 0);
+  if(r !== 'today') from.setDate(from.getDate() - (Number(r) - 1));
+  let od = ''; try{ od = localStorage.getItem('gd_office_dealer_v1') || ''; }catch(e){}
+  const dealer = od && !renderDealers.showAll ? od : '';
+  try{
+    const d = await api('/api/cancellations?from=' + encodeURIComponent(from.toISOString()) + (dealer ? '&dealer=' + encodeURIComponent(dealer) : ''));
+    cancelRows = d.list;
+    const refused = d.list.filter(x => x.by !== 'office').length;
+    document.getElementById('cancelCount').textContent = d.list.length + ' cancelled' + (refused ? ' · ' + refused + ' refused at the door' : '') + (dealer ? ' · 🏪 ' + dealer : '');
+    const when = t => new Date(t).toLocaleString('en-IN', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+    document.getElementById('cancelBody').innerHTML = d.list.length ? d.list.map(x => `<tr>
+        <td style="white-space:nowrap;">${esc(when(x.at))}</td>
+        <td><b>${esc(x.name || '')}</b><br>📞 ${esc(fmtNo(x.no))}${x.address ? '<br><span class="hint">' + esc(x.address) + '</span>' : ''}</td>
+        <td>${esc(x.dealer || '')}</td>
+        <td>${x.by === 'office' ? '🏢 Office' : '🚚 ' + esc(x.byName)}</td>
+        <td>${esc(x.reason || '—')}</td></tr>`).join('')
+      : '<tr><td colspan="5" class="hint">No cancelled bookings.</td></tr>';
+  }catch(e){ document.getElementById('cancelCount').textContent = 'Could not load: ' + e.message; }
+}
+function exportCancellations(){
+  if(typeof XLSX === 'undefined'){ toast('Excel tool still loading — try again in a moment'); return; }
+  const rows = [['Date', 'Customer', 'Mobile', 'Address', 'Dealership', 'Booking', 'Cancelled by', 'Reason']]
+    .concat(cancelRows.map(x => [new Date(x.at).toLocaleString('en-IN'), x.name, x.no.slice(0, 10), x.address, x.dealer, x.booking, x.by === 'office' ? 'Office' : x.byName, x.reason]));
+  const ws = XLSX.utils.aoa_to_sheet(rows), wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Cancelled');
+  XLSX.writeFile(wb, 'gasdost_cancelled_bookings.xlsx');
+}
+
 function fillAssignList(){
   try{ fillHistoryWho(); loadDealers(); }catch(e){}
   const sel = document.getElementById('assignTo');
@@ -1830,9 +1880,10 @@ async function sendOpsInParts(ops){
 async function bulkCancel(){
   const sel = selectedBehind();
   if(!sel.length) return;
-  if(!confirm('Cancel ' + sel.length + ' booking' + (sel.length === 1 ? '' : 's') + '? They disappear from the delivery men\'s phones within about a minute.')) return;
+  const reason = prompt('Cancel ' + sel.length + ' booking' + (sel.length === 1 ? '' : 's') + '? They disappear from the delivery men\'s phones within about a minute.\n\nReason (optional):', '');
+  if(reason === null) return;
   try{
-    await sendOpsInParts(sel.map(no => ({op:'cancel', no})));
+    await sendOpsInParts(sel.map(no => ({op:'cancel', no, reason})));
     toast(sel.length + ' booking' + (sel.length === 1 ? '' : 's') + ' cancelled');
     await afterBookingChange();
   }catch(e){ toast('Could not cancel: ' + e.message); }
@@ -1876,9 +1927,10 @@ async function moveBooking(no, sel){
   }catch(e){ toast('Could not move: ' + e.message); sel.disabled = false; sel.value = '__'; }
 }
 async function cancelBooking(no){
-  if(!confirm('Cancel the booking for ' + no + '? It disappears from the delivery man\'s phone within about a minute.')) return;
+  const reason = prompt('Cancel the booking for ' + no + '? It disappears from the delivery man\'s phone within about a minute.\n\nReason (optional):', '');
+  if(reason === null) return;
   try{
-    await api('/api/ops', {method:'POST', body:{ops:[{op:'cancel', no}]}});
+    await api('/api/ops', {method:'POST', body:{ops:[{op:'cancel', no, reason}]}});
     toast('Booking ' + no + ' cancelled');
     await afterBookingChange();
   }catch(e){ toast('Could not cancel: ' + e.message); }
@@ -2710,6 +2762,7 @@ async function refreshOnline(full){
     renderTeam();
     fillAssignList();
     loadTracker();
+    loadCancellations();
     // New locations for the people on the send list.
     const nos = recipients.map(r => r.no).slice(0, 2000);
     if(nos.length){

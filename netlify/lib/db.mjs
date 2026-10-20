@@ -537,7 +537,15 @@ export async function applyOps(ops, actor) {
               address = COALESCE(NULLIF(${o.address === "Address pending" ? "" : clean(o.address, 300)}, ''), address),
               changed_at = now() WHERE no = ${no}`;
       await fillBlankCustomerDetails([{ no, name: clean(o.name, 80), address: o.address === "Address pending" ? "" : clean(o.address, 300) }]);
-    } else if (o.op === "delete" || o.op === "cancel") {
+    } else if (o.op === "cancel" || o.op === "refused") {
+      // Cancelled (office) or refused at the door (phone): noted with the reason.
+      await q`
+        INSERT INTO cancellations (no, name, address, dealer, booking, by, reason)
+        SELECT b.no, b.name, b.address, COALESCE(NULLIF(b.dealer, ''), c.dealer, ''), b.booking, ${actor || "office"}, ${clean(o.reason, 200)}
+        FROM bookings b LEFT JOIN customers c ON c.no = b.no
+        WHERE b.no = ${no} AND NOT b.deleted AND b.status <> 'delivered'`;
+      await q`UPDATE bookings SET deleted = true, changed_at = now() WHERE no = ${no}`;
+    } else if (o.op === "delete") {
       await q`UPDATE bookings SET deleted = true, changed_at = now() WHERE no = ${no}`;
     } else if (o.op === "linksent") {
       // WhatsApp was opened with this customer's location link.
@@ -1087,4 +1095,17 @@ export async function ncPurgePhotos() {
     await q`DELETE FROM nc_photos WHERE conn_id = ${o.id}`;
     await q`UPDATE new_connections SET photos_deleted_at = now() WHERE id = ${o.id}`;
   }
+}
+
+/* ---------------- cancellations ---------------- */
+export async function listCancellations({ from = null, to = null, dealer = "" } = {}) {
+  const dl = dkey(dealer);
+  const rows = await q`
+    SELECT * FROM cancellations
+    WHERE (${from}::timestamptz IS NULL OR at >= ${from}::timestamptz) AND (${to}::timestamptz IS NULL OR at < ${to}::timestamptz)
+      AND (${dl} = '' OR lower(trim(dealer)) = ${dl})
+    ORDER BY at DESC LIMIT 2000`;
+  const names = await teamNames();
+  return rows.map((r) => ({ at: ms(r.at), no: r.no, name: r.name, address: r.address, dealer: r.dealer, booking: r.booking,
+    by: r.by, byName: r.by === "office" ? "Office" : (names[r.by] || "+" + r.by), reason: r.reason }));
 }

@@ -51,7 +51,7 @@ import {
   roleOf, staffKey, json, isPartner, normKey,
   searchCustomers, upsertCustomers, deleteCustomer, restoreCustomers, listBin, deleteLog, checkPin, changePin, addMissing, listMissing, fixMissing, missingFilled, deleteMissing, clearMissing, deleteAllCustomers, lookupCustomers, ensureTokens,
   newBookings, applyOps, syncForPhone, listBookings, statusSummary, bookingsBehind, deliveryHistory, customerDeliveries, listDealers, dealerSummary, linkTracker, trackerList,
-  ncStock, ncStockFor, ncMoveStock, ncStockLog, ncCreate, ncList, ncPhoto, ncSetStatus, ncCash,
+  listCancellations, ncStock, ncStockFor, ncMoveStock, ncStockLog, ncCreate, ncList, ncPhoto, ncSetStatus, ncCash,
   pingTeam, newPairCode, listTeam, deleteTeam, logoutTeam, removeTeam, teamNames, logoutAtFor, getMeta, setMeta, importOld,
 } from "../lib/db.mjs";
 
@@ -70,6 +70,10 @@ export default async (req) => {
   try {
     if (what === "whoami" && m === "GET") return json({ role });
     if (what === "dealers" && m === "GET") return json({ dealers: await listDealers() });
+    if (what === "cancellations" && m === "GET") {
+      if (!isAdmin) return adminOnly();
+      return json({ list: await listCancellations({ from: p.get("from") || null, to: p.get("to") || null, dealer: p.get("dealer") || "" }) });
+    }
 
     if (what === "pair-code" && m === "POST") {
       if (!isAdmin) return adminOnly();

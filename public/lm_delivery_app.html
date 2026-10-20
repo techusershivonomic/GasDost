@@ -222,6 +222,18 @@
   </div>
 </div>
 
+<!-- Customer refused / cancel: pick a reason -->
+<div id="refuseSheet" class="pair-scan" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+  <div class="pair-scan-card" style="text-align:left;">
+    <div style="font-weight:800;font-size:18px;">🚫 Cancel this booking</div>
+    <div class="hint" id="refuseWho" style="margin:4px 0 10px;"></div>
+    <div id="refuseReasons"></div>
+    <input type="text" id="refuseOther" maxlength="120" placeholder="Other reason — type here" style="margin-top:8px;">
+    <button class="btn btn-primary" style="background:#d33;" onclick="refuseBooking(document.getElementById('refuseOther').value)">Cancel with this reason</button>
+    <button class="btn btn-ghost" onclick="document.getElementById('refuseSheet').style.display='none'">✖ Keep the booking</button>
+  </div>
+</div>
+
 <!-- ============ LOGIN ============ -->
 <div id="loginScreen" class="login-screen">
   <div class="login-card">
@@ -562,7 +574,7 @@
    Shown on the Dashboard so there is never any doubt about which version a
    phone is actually running. If this doesn't match the latest, the device is
    on a stale copy and needs a proper reload. */
-const BUILD = 'Build 62 \u00b7 20 Oct 2026';
+const BUILD = 'Build 63 \u00b7 20 Oct 2026';
 window.addEventListener('load', ()=>{
   const el = document.getElementById('buildTag');
   if(el) el.textContent = BUILD;
@@ -1089,7 +1101,7 @@ function renderStatList(){
         <button class="btn btn-ghost" onclick="navigateTo('${c.no}')">🧭 Navigate</button>
         <button class="btn btn-primary" style="background:var(--green);" onclick="markDelivered('${c.no}')">✅ Delivered</button>
       </div>
-      ${onlinePossible() ? `<div class="sl-acts"><button class="btn btn-ghost" onclick="openPassOn('${c.no}')">↪ Give to someone else</button></div>
+      ${onlinePossible() ? `<div class="sl-acts"><button class="btn btn-ghost" onclick="openPassOn('${c.no}')">↪ Give to someone else</button><button class="btn btn-ghost" style="color:#d33;" onclick="openRefuse('${c.no}')">🚫 Cancel</button></div>
       <div class="po-box" id="po_${c.no}" style="display:none;"></div>` : ''}`}
     </div>`;
   }).join('');
@@ -1112,6 +1124,41 @@ async function openPassOn(no){
     others.map(t => `<button class="btn btn-ghost po-man" onclick="passOn('${no}','${t.phone}')">👤 ${escapeHtml(t.name || t.phone.slice(2))} <span class="po-no">${t.phone.slice(2)}</span></button>`).join('') +
     `<button class="btn btn-ghost" onclick="openPassOn('${no}')">✖ Keep it</button>`;
 }
+/* ---- Customer refused / cancel at the door ----
+   The booking leaves this phone; the office sees it under "Cancelled bookings"
+   with the reason. */
+const REFUSE_REASONS = ['🙅 Customer refused', '🔒 Door locked / not at home', '🛢️ Already has a cylinder', '📍 Wrong address', '💰 No money to pay'];
+let refuseNo = null;
+function openRefuse(no){
+  const c = findConsumer(no);
+  if(!c) return;
+  refuseNo = no;
+  document.getElementById('refuseWho').textContent = ((c.name && c.name !== 'New Customer') ? c.name : mob(no)) + ' · 📞 ' + mob(no);
+  document.getElementById('refuseOther').value = '';
+  document.getElementById('refuseReasons').innerHTML = REFUSE_REASONS.map(r =>
+    `<button class="btn btn-ghost" style="margin:5px 0;text-align:left;justify-content:flex-start;" onclick="refuseBooking(this.textContent)">${r}</button>`).join('');
+  document.getElementById('refuseSheet').style.display = 'flex';
+}
+function refuseBooking(reason){
+  reason = String(reason || '').trim();
+  if(!reason){ toast('Choose or type a reason'); return; }
+  const no = refuseNo;
+  document.getElementById('refuseSheet').style.display = 'none';
+  const list = getConsumers();
+  const idx = list.findIndex(c => c.no === no);
+  if(idx < 0) return;
+  const c = list[idx];
+  list.splice(idx, 1);
+  applyingRemote = true;
+  try{ saveStoreRaw(list); } finally { applyingRemote = false; }
+  const snap = readJSON(SYNC_SNAP_STORE, {}) || {};
+  delete snap[no]; writeJSON(SYNC_SNAP_STORE, snap);
+  writeJSON(SYNC_OUTBOX_STORE, readJSON(SYNC_OUTBOX_STORE, []).concat([{kind:'op', op:{op:'refused', no, reason}}]));
+  afterBookingsChanged();
+  toast('🚫 ' + ((c.name && c.name !== 'New Customer') ? c.name : mob(no)) + ' — cancelled');
+  syncWithOffice();
+}
+
 function passOn(no, to){
   const list = getConsumers();
   const idx = list.findIndex(c => c.no === no);
@@ -1201,7 +1248,10 @@ function renderNextCard(){
       <a class="btn btn-call" href="tel:+91${mob(c.no)}">📞 Call</a>
       <button class="btn btn-done" onclick="routeDelivered('${c.no}')">✅ Delivered</button>
     </div>
-    ${list.length > 1 ? `<button class="next-skip" onclick="skipNext('${c.no}')">⏭ Next customer</button>` : ''}`;
+    <div style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;">
+      ${list.length > 1 ? `<button class="next-skip" onclick="skipNext('${c.no}')">⏭ Next customer</button>` : ''}
+      ${onlinePossible() ? `<button class="next-skip" style="color:#d33;" onclick="openRefuse('${c.no}')">🚫 Customer refused / cancel</button>` : ''}
+    </div>`;
 }
 // Find customer: today's bookings by name or a few digits of the number.
 function renderFind(){
@@ -1227,6 +1277,7 @@ function renderFind(){
         <a class="btn btn-call" style="min-height:52px;font-size:16px;" href="tel:+91${mob(c.no)}">📞 Call</a>
         ${done ? '' : `<button class="btn" style="min-height:52px;font-size:16px;background:var(--green);color:#fff;" onclick="routeDelivered('${c.no}');renderFind()">✅ Done</button>`}
       </div>
+      ${done || !onlinePossible() ? '' : `<button class="next-skip" style="color:#d33;margin:6px 0 0;" onclick="openRefuse('${c.no}')">🚫 Customer refused / cancel</button>`}
     </div>`;
   }).join('') + (found.length > 5 ? `<div class="next-meta" style="margin-top:8px;">+${found.length - 5} more — type more letters</div>` : '');
 }
