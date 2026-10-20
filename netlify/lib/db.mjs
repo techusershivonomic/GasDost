@@ -857,12 +857,14 @@ export async function statusSummary(dealer = "") {
 
 // A phone checking in. Returns when the office last logged this phone out
 // (the phone compares it with when it logged in).
-export async function pingTeam(phone, name, loginAt) {
+export async function pingTeam(phone, name, loginAt, dealer) {
+  const dl = dealer == null ? null : clean(dealer, 80);
   const rows = await q`SELECT logout_at FROM team WHERE phone = ${phone}`;
   const logoutAt = rows[0] ? ms(rows[0].logout_at) : null;
   if (logoutAt && (!loginAt || Number(loginAt) < logoutAt)) return { logoutAt }; // logged out: don't mark active
-  await q`INSERT INTO team (phone, name, last_active) VALUES (${phone}, ${clean(name, 60)}, now())
-          ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name, last_active = now()`;
+  await q`INSERT INTO team (phone, name, last_active, dealer) VALUES (${phone}, ${clean(name, 60)}, now(), ${dl})
+          ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name, last_active = now(),
+            dealer = COALESCE(EXCLUDED.dealer, team.dealer)`;
   return { logoutAt };
 }
 export async function logoutAtFor(phone) {
@@ -879,7 +881,7 @@ export async function listTeam() {
       AND (t.last_active > now() - interval '3 days'
            OR EXISTS (SELECT 1 FROM bookings b WHERE b.assigned_to = t.phone AND NOT b.deleted AND b.status <> 'delivered'))
     ORDER BY name`;
-  return rows.map((r) => ({ phone: r.phone, name: r.name, lastActive: ms(r.last_active) }));
+  return rows.map((r) => ({ phone: r.phone, name: r.name, lastActive: ms(r.last_active), dealer: r.dealer }));
 }
 export async function logoutTeam(phone) {
   await q`UPDATE team SET logout_at = now() WHERE phone = ${phone}`;

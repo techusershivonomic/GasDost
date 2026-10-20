@@ -1431,8 +1431,8 @@ async function loadNcStock(){
     ncStockRows = d.stock;
     const team = getTeam();
     const men = new Map();
-    team.forEach(m => men.set(m.phone, m.name || ('+' + m.phone)));
-    d.stock.forEach(m => { if(!men.has(m.phone)) men.set(m.phone, m.name || ('+' + m.phone)); });
+    team.filter(menForDealer).forEach(m => men.set(m.phone, m.name || ('+' + m.phone)));
+    d.stock.forEach(m => { const t = team.find(x => x.phone === m.phone); if(!men.has(m.phone) && (!t || menForDealer(t))) men.set(m.phone, m.name || ('+' + m.phone)); });
     const sel = document.getElementById('ncMan'), keep = sel.value;
     sel.innerHTML = '<option value="">👉 Choose delivery man</option>' + [...men].sort((a, b) => a[1].localeCompare(b[1]))
       .map(([ph, nm]) => `<option value="${esc(ph)}">${esc(nm)}</option>`).join('');
@@ -1549,17 +1549,30 @@ async function ncExport(){
   XLSX.writeFile(wb, 'gasdost_new_connections.xlsx');
 }
 
+// Delivery men of this computer's dealership (plus those who work for both,
+// or whose phone hasn't told us yet).
+function menForDealer(m){
+  let od = ''; try{ od = localStorage.getItem('gd_office_dealer_v1') || ''; }catch(e){}
+  if(!od || fillAssignList.showAll) return true;
+  return m.dealer == null || m.dealer === '' || String(m.dealer).trim().toLowerCase() === od.trim().toLowerCase();
+}
 function fillAssignList(){
   try{ fillHistoryWho(); loadDealers(); }catch(e){}
   const sel = document.getElementById('assignTo');
   if(!sel) return;
   const keep = sel.value;
-  const team = getTeam().slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const all = getTeam().slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const team = all.filter(menForDealer);
+  const hidden = all.length - team.length;
   sel.innerHTML = '<option value="__">👉 Choose delivery man</option>' +
-    team.map(m => `<option value="${esc(m.phone)}">For: ${esc(m.name || ('+' + m.phone))}</option>`).join('') +
-    '<option value="">For: any delivery man (everyone sees it)</option>';
+    team.map(m => `<option value="${esc(m.phone)}">For: ${esc(m.name || ('+' + m.phone))}${m.dealer ? ' · ' + esc(m.dealer) : ''}</option>`).join('') +
+    '<option value="">For: any delivery man (everyone sees it)</option>' +
+    (hidden ? `<option value="__all">👥 Show all delivery men (${hidden} more)</option>` : '');
   sel.value = [...sel.options].some(o => o.value === keep) ? keep : '__';
-  sel.onchange = () => sel.classList.remove('need-pick');
+  sel.onchange = () => {
+    sel.classList.remove('need-pick');
+    if(sel.value === '__all'){ fillAssignList.showAll = true; fillAssignList(); sel.value = '__'; }
+  };
 }
 
 function buildDeliveryStatus(){
@@ -3310,6 +3323,7 @@ function setOfficeDealer(d){
   toast('🏪 This computer: ' + (d || 'All dealerships'));
   try{ renderDealers.showAll = false; renderDealers(); refreshOnline(); }catch(e){}
   try{ loadRecipients.showAll = false; if(document.getElementById('tab-send').classList.contains('active')) loadRecipients(); }catch(e){}
+  try{ fillAssignList.showAll = false; fillAssignList(); }catch(e){}
   try{ missingOffset = 0; loadMissing(); }catch(e){}
   try{ renderTracker(); }catch(e){}
   try{ if(document.getElementById('tab-newconn').classList.contains('active')) loadNc(); }catch(e){}

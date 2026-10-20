@@ -261,7 +261,7 @@ export default async (req) => {
       if (m === "POST") {
         const phone = String(body.phone || "").replace(/\D/g, "");
         if (!isPartner(phone)) return json({ error: "Bad phone" }, 400);
-        return json({ ok: true, ...(await pingTeam(phone, body.name, body.loginAt)) });
+        return json({ ok: true, ...(await pingTeam(phone, body.name, body.loginAt, typeof body.dealer === "string" ? body.dealer : null)) });
       }
       // Phones may see their colleagues' names (to pass a booking on).
       if (m === "GET") return json({ team: (await listTeam()).map((t) => isAdmin ? t : { phone: t.phone, name: t.name }) });

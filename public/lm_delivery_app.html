@@ -562,7 +562,7 @@
    Shown on the Dashboard so there is never any doubt about which version a
    phone is actually running. If this doesn't match the latest, the device is
    on a stale copy and needs a proper reload. */
-const BUILD = 'Build 61 \u00b7 20 Oct 2026';
+const BUILD = 'Build 62 \u00b7 20 Oct 2026';
 window.addEventListener('load', ()=>{
   const el = document.getElementById('buildTag');
   if(el) el.textContent = BUILD;
@@ -637,7 +637,7 @@ function login(){
 const MY_DEALER_KEY = 'gd_my_dealer_v1';
 let dealerNames = [];
 function myDealer(){ try{ return localStorage.getItem(MY_DEALER_KEY) || ''; }catch(e){ return ''; } }
-function setMyDealer(d){ try{ localStorage.setItem(MY_DEALER_KEY, d || ''); }catch(e){} renderDealerBtn(); }
+function setMyDealer(d){ try{ localStorage.setItem(MY_DEALER_KEY, d || ''); }catch(e){} renderDealerBtn(); try{ if(getLoggedInPhone()) heartbeat(); }catch(e){} }
 const sameDealer = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 // From a list of customers of different dealerships, the one of my dealership.
 function mineOf(list){ const d = myDealer(); return d ? (list.find(c => sameDealer(c.dealer, d)) || null) : null; }
@@ -744,7 +744,7 @@ function heartbeat(){
   if(typeof onlinePossible === 'function' && onlinePossible()){
     let loginAt = +localStorage.getItem(LOGIN_AT_KEY) || 0;
     if(!loginAt){ loginAt = Date.now(); localStorage.setItem(LOGIN_AT_KEY, String(loginAt)); }
-    staffApi('/api/team', {method:'POST', body:{phone, name, loginAt}})
+    staffApi('/api/team', {method:'POST', body:{phone, name, loginAt, dealer: myDealer()}})
       .then(r => checkOfficeLogout(r.logoutAt)).catch(()=>{});
   }
 }
