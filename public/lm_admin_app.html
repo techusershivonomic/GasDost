@@ -511,7 +511,7 @@
         <label>🏠 Address 3<select id="smAddr3" onchange="smartPreview()"></select></label>
         <label>🏠 Area / Pin<select id="smAddr4" onchange="smartPreview()"></select></label>
         <label>🏠 Pin code<select id="smAddr5" onchange="smartPreview()"></select></label>
-        <label>🏪 Dealership<select id="smDealer" onchange="smartDealerMap();smartPreview()"></select></label>
+        <label>🏪 Dealership<select id="smDealer" onchange="smartNewDealer(this);smartDealerMap();smartPreview()"></select></label>
       </div>
       <div id="smDealerMap" class="dealer-map" style="display:none;"></div>
       <div class="hint" id="smartCounts"></div>
@@ -2743,7 +2743,7 @@ function smartGuess(){
   // Dealership: a column in the file, or one dealership for the whole file.
   const dsel = document.getElementById('smDealer');
   const fixed = (allDealers.length ? allDealers : []).map(d => `<option value="fixed:${esc(d)}">Whole file: ${esc(d)}</option>`).join('');
-  dsel.innerHTML = fixed + '<option value="fixed:">Whole file: (no dealership)</option>' +
+  dsel.innerHTML = fixed + '<option value="__newdealer">➕ Whole file: a NEW dealership…</option><option value="fixed:">Whole file: (no dealership)</option>' +
     smart.cols.map(c => `<option value="${c.i}">Column: ${esc(c.h)}</option>`).join('');
   let dv = dealerCol ? String(dealerCol.i) : '';
   if(!dv){
@@ -2806,6 +2806,21 @@ function smartDealerMap(){
     (Object.keys(counts).length > names.length ? '<div class="hint">Only the 60 most common names are shown — rows with other names are skipped.</div>' : '');
   smart.dmNames = names;
   box.style.display = 'block';
+}
+// A file for a dealership that isn't in the system yet: type its name once.
+function smartNewDealer(sel){
+  if(sel.value !== '__newdealer') return;
+  const name = (prompt('Name of the new dealership (type it exactly as it should appear everywhere, e.g. DARSHAN GAS SERVICE):', '') || '').replace(/\s+/g, ' ').trim().toUpperCase().slice(0, 80);
+  if(!name){ sel.value = 'fixed:'; return; }
+  // Typed a name that is really an existing one? Use that instead.
+  const same = autoDealer(name);
+  if(same && !same.startsWith('new:') && !confirm('"' + name + '" looks like your existing dealership "' + same + '".\n\nOK = use ' + same + '\nCancel = create the new dealership "' + name + '"')){
+    // keep the new name
+  } else if(same && !same.startsWith('new:')){ sel.value = 'fixed:' + same; return; }
+  if(!allDealers.includes(name)) allDealers.push(name);
+  const o = new Option('Whole file: ' + name + ' (new)', 'fixed:' + name);
+  sel.add(o, 0); sel.value = o.value;
+  toast('🏪 ' + name + ' will be created when you save');
 }
 function smartSetAlias(i, val){
   const n = smart.dmNames[i];
