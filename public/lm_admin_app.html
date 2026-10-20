@@ -23,6 +23,10 @@
   header h1{font-size:19px;margin:0;font-weight:700;}
   header .badge{background:rgba(255,255,255,.18);padding:4px 12px;border-radius:20px;font-size:12px;font-weight:500;}
   main{max-width:1100px;margin:0 auto;padding:22px 32px 60px;}
+  .smart-box{border:2px solid var(--blue, #0a6cff);border-radius:12px;padding:16px;margin-top:14px;background:#f7faff;}
+  .smart-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin:10px 0;}
+  .smart-grid label{font-size:12.5px;font-weight:600;display:flex;flex-direction:column;gap:4px;}
+  .smart-grid .req{color:#d33;}
   .tab-panel{display:none;grid-template-columns:1fr 1fr;gap:22px;align-items:start;}
   .tab-panel.active{display:grid;}
   @media (max-width:920px){ .tab-panel{grid-template-columns:1fr;} }
@@ -478,16 +482,40 @@
 <section class="tab-panel" id="tab-customers">
   <div class="card" style="grid-column:1 / -1;">
     <h2>Upload customer list</h2>
-    <p class="small">Download the template, fill in one row per customer, upload it, then press <b>Save customers</b>. When the console shows <b>🟢 Online</b> (top right), customers are saved in the online database — safe even if this browser is cleared, and the same on every office computer. They can be searched in <b>Bookings</b> and <b>Send links</b>. Uploading again updates customers already saved (matched by mobile number) and adds the new ones.</p>
+    <p class="small"><b>Any Excel or CSV works</b> — for example the customer report from the HPCL or BPCL portal, with its own columns. The console finds the name, mobile, address and consumer number by itself and shows you a preview; change a column if it guessed wrong, then press <b>Save customers</b>. Or use the template below. When the console shows <b>🟢 Online</b> (top right), customers are saved in the online database — safe even if this browser is cleared, and the same on every office computer. They can be searched in <b>Bookings</b> and <b>Send links</b>. Uploading again updates customers already saved (matched by mobile number) and adds the new ones.</p>
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
       <button class="btn btn-ghost" onclick="downloadCustomerTemplate()">⬇ Download customer template</button>
       <label class="btn btn-primary" style="cursor:pointer;margin:0;">
-        ⬆ Upload filled template
+        ⬆ Upload Excel / CSV
         <input type="file" id="custFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleCustomerUpload(event)">
       </label>
     </div>
     <div class="hint">Columns: <b>Name</b>, <b>Mobile Number</b>, <b>First Address</b>, <b>Dealer Name</b>. Name and Mobile Number are required, the rest can be left blank. The <b>Unique code</b> is given automatically when you save — C0001, C0002 and so on — and a customer keeps the same code for good.</div>
     <div class="error" id="custError"></div>
+    <div id="smartBox" class="smart-box" style="display:none;">
+      <div class="batch-header" style="margin-bottom:6px;"><h3 style="margin:0;">🧠 Columns found in <span id="smartFile"></span></h3>
+        <button class="btn btn-ghost" style="width:auto;padding:6px 12px;" onclick="smartCancel()">✖ Close</button></div>
+      <div class="hint" id="smartInfo" style="margin-top:0;"></div>
+      <div class="smart-grid">
+        <label>Sheet<select id="smSheet" onchange="smartPickSheet(this.value)"></select></label>
+        <label>Header row<input type="number" id="smHeader" min="1" max="60" onchange="smartSetHeader(+this.value)"></label>
+        <label>👤 Name <span class="req">*</span><select id="smName" onchange="smartPreview()"></select></label>
+        <label>📞 Mobile <span class="req">*</span><select id="smMobile" onchange="smartPreview()"></select></label>
+        <label>📞 Other phone (used if mobile is blank)<select id="smPhone2" onchange="smartPreview()"></select></label>
+        <label>🔢 Consumer no.<select id="smCons" onchange="smartPreview()"></select></label>
+        <label>🏠 Address 1<select id="smAddr1" onchange="smartPreview()"></select></label>
+        <label>🏠 Address 2<select id="smAddr2" onchange="smartPreview()"></select></label>
+        <label>🏠 Address 3<select id="smAddr3" onchange="smartPreview()"></select></label>
+        <label>🏠 Area / Pin<select id="smAddr4" onchange="smartPreview()"></select></label>
+        <label>🏠 Pin code<select id="smAddr5" onchange="smartPreview()"></select></label>
+        <label>🏪 Dealership<select id="smDealer" onchange="smartPreview()"></select></label>
+      </div>
+      <div class="hint" id="smartCounts"></div>
+      <div style="overflow-x:auto;"><table style="margin-top:6px;">
+        <thead><tr><th>Name</th><th>Mobile</th><th>Address</th><th>Consumer no.</th><th>Dealership</th></tr></thead>
+        <tbody id="smartBody"></tbody></table></div>
+      <button class="btn btn-primary" style="width:auto;margin-top:12px;" onclick="smartUse()">✅ These columns are right — continue</button>
+    </div>
     <div class="warn-box" id="custPending" style="display:none;">
       <div id="custPendingText"></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
@@ -2033,7 +2061,7 @@ async function downloadMissing(){
   }catch(e){ toast('Could not download: ' + e.message); return; }
   if(!all.length){ toast('Nothing to download'); return; }
   // The last column lets a corrected sheet update these same rows instead of adding new ones.
-  const rows = [['Name', 'Mobile Number', 'First Address', 'Dealer Name', 'Missing ID (do not change)']].concat(all.map(r => [r.name, r.badMobile || '', r.address, r.dealer, r.id]));
+  const rows = [['Name', 'Mobile Number', 'First Address', 'Dealer Name', 'Consumer No', 'Missing ID (do not change)']].concat(all.map(r => [r.name, r.badMobile || '', r.address, r.dealer, r.consumerNo || '', r.id]));
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!cols'] = [{wch:24},{wch:16},{wch:45},{wch:22},{wch:22}];
   const wb = XLSX.utils.book_new();
@@ -2511,7 +2539,7 @@ function hideQr(){
    Kept by mobile number, so re-uploading an updated sheet refreshes the people
    already here instead of duplicating them. */
 const CUST_HEADERS = ['Name', 'Mobile Number', 'First Address', 'Dealer Name']; // template — unique code is made by the app
-const CUST_EXPORT_HEADERS = CUST_HEADERS.concat(['Unique Code']);
+const CUST_EXPORT_HEADERS = CUST_HEADERS.concat(['Unique Code', 'Consumer No']);
 
 // Next free code: C0001, C0002 … carrying on from the highest one already used,
 // so codes are never reused even after customers are removed.
@@ -2571,72 +2599,236 @@ function customerColumns(header){
   };
 }
 
+/* ---------------- Smart import ----------------
+   Any Excel/CSV: finds the real header row (skipping report titles), works out
+   which column is the name, mobile, address, consumer number and dealership —
+   from the headings and from what is inside the cells — and shows a preview
+   that can be corrected before anything is saved. The choice is remembered
+   for the next file with the same columns. */
+let smart = null;
+const SMART_STORE = 'gd_smart_layouts_v1';
+const smNorm = h => String(h == null ? '' : h).toLowerCase().replace(/[^a-z0-9]/g, '');
+const smCell = v => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+function smMobile(v){
+  let no = String(v == null ? '' : v).replace(/\.0+$/, '').replace(/\D/g, '');
+  if(no.length === 12 && no.startsWith('91')) no = no.slice(2);
+  if(no.length === 11 && no.startsWith('0')) no = no.slice(1);
+  return isValidMobileNo(no) ? no : '';
+}
 function handleCustomerUpload(evt){
   const file = evt.target.files[0];
   const errEl = document.getElementById('custError');
-  const summaryEl = document.getElementById('custSummary');
   errEl.textContent = '';
-  summaryEl.style.display = 'none';
+  document.getElementById('custSummary').style.display = 'none';
+  document.getElementById('custPending').style.display = 'none';
   if(!file) return;
-
+  errEl.textContent = '⏳ Reading ' + file.name + '…';
   const reader = new FileReader();
   reader.onload = e => {
-    let rows;
     try{
-      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
-      rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, blankrows:false, raw:false});
-    }catch(err){
-      errEl.textContent = 'Could not read that file — make sure it is the .xlsx/.xls/.csv customer template.';
-      evt.target.value = '';
-      return;
-    }
-    if(!rows.length){ errEl.textContent = 'That file is empty.'; evt.target.value = ''; return; }
-
-    const col = customerColumns(rows[0]);
-    const cell = (r, i) => String(r[i] == null ? '' : r[i]).replace(/\s+/g, ' ').trim();
-    const seen = {};
-    const good = [];
-    let invalid = 0;
-    const badRows = [];
-    const missing = [];
-    rows.slice(1).forEach((r, idx) => {
-      const rawNo = cell(r, col.mobile);
-      let no = rawNo.replace(/\D/g, '');
-      if(no.length === 12 && no.startsWith('91')) no = no.slice(2); // +91 written in
-      if(no.length === 11 && no.startsWith('0')) no = no.slice(1);
-      const name = cell(r, col.name);
-      const mid = col.missingId >= 0 ? cell(r, col.missingId).replace(/\D/g, '') : '';
-      // A name but no usable mobile: kept aside so the number can be filled in later.
-      if(name && !isValidMobileNo(no)){ missing.push({name, address: cell(r, col.address), dealer: cell(r, col.dealer), badMobile: rawNo, id: mid}); return; }
-      if(!isValidMobileNo(no) || !name){ invalid++; if(badRows.length < 5) badRows.push(idx + 2); return; }
-      const rec = { name, no, address: cell(r, col.address), dealer: cell(r, col.dealer), missingId: mid };
-      // Same number + same dealership twice in the file: last row wins.
-      // Same number with another dealership is another customer.
-      const sk = no + '|' + rec.dealer.toLowerCase();
-      if(seen[sk] !== undefined) good[seen[sk]] = rec;
-      else { seen[sk] = good.length; good.push(rec); }
-    });
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:false});
+      const sheets = wb.SheetNames.map(n => ({name: n, rows: XLSX.utils.sheet_to_json(wb.Sheets[n], {header:1, blankrows:true, raw:true, defval:''})}))
+        .filter(x => x.rows.some(r => r.some(v => smCell(v))));
+      if(!sheets.length){ errEl.textContent = 'That file is empty.'; return; }
+      errEl.textContent = '';
+      smart = {file: file.name, sheets, sheet: 0};
+      // Start on the sheet with the most rows.
+      sheets.forEach((x, i) => { if(x.rows.length > sheets[smart.sheet].rows.length) smart.sheet = i; });
+      document.getElementById('smSheet').innerHTML = sheets.map((x, i) => `<option value="${i}">${esc(x.name)}</option>`).join('');
+      document.getElementById('smartFile').textContent = file.name;
+      smartPickSheet(smart.sheet);
+    }catch(err){ errEl.textContent = 'Could not read that file — it should be an Excel (.xlsx / .xls) or CSV file.'; }
     evt.target.value = '';
-
-    pendingMissing = missing;
-    if(!good.length && !missing.length){
-      errEl.textContent = 'No customers could be read from that file' + (invalid ? ` — ${invalid} row${invalid===1?'':'s'} had a missing name or wrong mobile number (row ${badRows.join(', ')}).` : '.');
-      return;
-    }
-    const saved = {};
-    getCustomers().forEach(c => saved[c.no] = true);
-    const newCount = good.filter(c => !saved[c.no]).length;
-    pendingCustomers = good;
-    document.getElementById('custPendingText').innerHTML =
-      `📄 <b>${good.length}</b> customer${good.length===1?'':'s'} read from <b>${esc(file.name)}</b> — ` +
-      `${newCount} new, ${good.length - newCount} already saved (will be updated).` +
-      (missing.length ? `<br>📵 <b>${missing.length.toLocaleString()}</b> row${missing.length===1?' has':'s have'} a name but no mobile number — ${isOnline() ? 'they go to the <b>Missing mobile number</b> list below, so you can fill the number in later.' : 'connect to the online database to keep them aside.'}` : '') +
-      (invalid ? `<br>Skipped ${invalid} row${invalid===1?'':'s'} with no name (row ${badRows.join(', ')}${invalid > badRows.length ? '…' : ''}).` : '') +
-      `<br><b>Not saved yet</b> — press Save customers to keep them.`;
-    document.getElementById('custPending').style.display = 'block';
   };
   reader.onerror = () => { errEl.textContent = 'Could not read that file.'; evt.target.value = ''; };
   reader.readAsArrayBuffer(file);
+}
+// The header row: the row in the first 40 that looks most like column titles.
+function smFindHeader(rows){
+  const words = ['name','mobile','phone','address','consumer','dealer','distributor','area','pin','contact','customer','city','flat','house','road'];
+  let best = 0, bestScore = -1;
+  rows.slice(0, 40).forEach((r, i) => {
+    const cells = r.map(smCell).filter(Boolean);
+    if(cells.length < 3) return;
+    const texty = cells.filter(c => /[a-z]/i.test(c) && !/^\d+([.,]\d+)?$/.test(c)).length;
+    const hits = cells.filter(c => words.some(w => smNorm(c).includes(w))).length;
+    const score = hits * 3 + texty - (cells.length - texty) * 2;
+    if(score > bestScore){ bestScore = score; best = i; }
+  });
+  return best;
+}
+function smartPickSheet(i){
+  smart.sheet = +i;
+  document.getElementById('smSheet').value = String(i);
+  smartSetHeader(smFindHeader(smart.sheets[smart.sheet].rows) + 1, true);
+}
+function smartSetHeader(rowNo, auto){
+  const sh = smart.sheets[smart.sheet];
+  smart.headerIdx = Math.max(0, Math.min(sh.rows.length - 1, (rowNo || 1) - 1));
+  document.getElementById('smHeader').value = smart.headerIdx + 1;
+  const head = sh.rows[smart.headerIdx];
+  const width = Math.max(head.length, ...sh.rows.slice(smart.headerIdx + 1, smart.headerIdx + 50).map(r => r.length));
+  smart.cols = [];
+  for(let c = 0; c < width; c++){
+    const h = smCell(head[c]);
+    // Columns with no heading and nothing inside are left out.
+    const any = sh.rows.slice(smart.headerIdx + 1, smart.headerIdx + 200).some(r => smCell(r[c]));
+    if(h || any) smart.cols.push({i: c, h: h || ('Column ' + XLSX.utils.encode_col(c))});
+  }
+  smart.data = sh.rows.slice(smart.headerIdx + 1).filter(r => r.some(v => smCell(v)));
+  // A "Distributor Code : 233771" line above the table.
+  smart.distCode = '';
+  sh.rows.slice(0, smart.headerIdx).forEach(r => {
+    const line = r.map(smCell).filter(Boolean).join(' ');
+    const m = /distributor\s*code\s*:?\s*(\d{4,})/i.exec(line);
+    if(m) smart.distCode = m[1];
+  });
+  smartGuess();
+}
+function smartGuess(){
+  const cols = smart.cols, sample = smart.data.slice(0, 300);
+  const stat = c => {
+    let mob = 0, filled = 0, letters = 0, len = 0, nums = 0;
+    const vals = new Set();
+    sample.forEach(r => {
+      const v = smCell(r[c.i]); if(!v) return;
+      filled++; len += v.length; vals.add(v.toLowerCase());
+      if(smMobile(v)) mob++;
+      if(/^[a-z .'-]+$/i.test(v) && /[a-z]/i.test(v)) letters++;
+      if(/^\d+(\.0+)?$/.test(v)) nums++;
+    });
+    return {mob: filled ? mob / filled : 0, filled, letters: filled ? letters / filled : 0, len: filled ? len / filled : 0,
+            nums: filled ? nums / filled : 0, uniq: filled ? vals.size / filled : 0};
+  };
+  cols.forEach(c => { c.n = smNorm(c.h); c.s = stat(c); });
+  const pick = (score) => { let b = null, bs = 0; cols.forEach(c => { const v = score(c); if(v > bs){ bs = v; b = c; } }); return b; };
+  const has = (c, ...w) => w.some(x => c.n.includes(x));
+  const not = (c, ...w) => !w.some(x => c.n.includes(x));
+  const mobile = pick(c => c.s.mob > 0.3 ? c.s.mob * 10 + (has(c, 'mobile', 'cell') ? 5 : 0) + (has(c, 'office', 'residence') ? -3 : 0) : 0);
+  const phone2 = pick(c => c !== mobile && c.s.mob > 0.2 ? c.s.mob * 10 + (has(c, 'residence', 'phone', 'contact') ? 3 : 0) : 0);
+  const name = pick(c => {
+    if(has(c, 'father', 'mother', 'spouse', 'dealer', 'distributor', 'area', 'package', 'description', 'regulator', 'district', 'village', 'city', 'town', 'scheme', 'market', 'complex', 'street', 'house', 'flat')) return 0;
+    let v = (has(c, 'consumername', 'customername') ? 20 : has(c, 'name') ? 10 : 0) + c.s.letters * 8;
+    return c.s.filled ? v : 0;
+  });
+  const cons = pick(c => (has(c, 'consumerno', 'consumernumber', 'consumerid', 'custno', 'customerno') ? 10 + (has(c, 'number') || c.n.endsWith('no') ? 5 : 0) : 0) + (c.s.nums > 0.9 && c.s.uniq > 0.95 && c.s.mob < 0.2 && has(c, 'consumer') ? 3 : 0));
+  // Address: one full "Address" column if there is one, else the parts.
+  const full = pick(c => c.n === 'address' || c.n === 'fulladdress' || c.n === 'customeraddress' ? 10 + c.s.len / 10 : 0);
+  let parts = [];
+  if(full) parts = [full];
+  else {
+    parts = cols.filter(c => has(c, 'addressline', 'address1', 'address2', 'address3', 'firstaddress', 'address') && not(c, 'email'));
+    if(!parts.length) parts = cols.filter(c => has(c, 'house', 'flat', 'building', 'complex', 'street', 'road'));
+    const area = cols.find(c => c.n === 'area' || c.n === 'arealandmark' || c.n === 'locality');
+    if(area && !parts.includes(area)) parts.push(area);
+    const pin = cols.find(c => c.n === 'pin' || c.n === 'pincode' || c.n === 'pinno');
+    if(pin && !parts.includes(pin)) parts.push(pin);
+  }
+  const dealerCol = pick(c => has(c, 'dealername', 'distributorname', 'dealer') && not(c, 'code') ? 10 : 0);
+  const sig = smart.cols.map(c => c.n).join('|');
+  let saved = null; try{ saved = JSON.parse(localStorage.getItem(SMART_STORE) || '{}')[sig]; }catch(e){}
+  smart.sig = sig;
+  const opt = (id, sel, none) => {
+    const el = document.getElementById(id);
+    el.innerHTML = `<option value="">${none}</option>` + smart.cols.map(c => `<option value="${c.i}">${esc(c.h)}</option>`).join('');
+    el.value = sel ? String(sel.i) : '';
+  };
+  opt('smName', name, '— choose —'); opt('smMobile', mobile, '— choose —'); opt('smPhone2', phone2, '— none —');
+  opt('smCons', cons, '— none —');
+  ['smAddr1','smAddr2','smAddr3','smAddr4','smAddr5'].forEach((id, k) => opt(id, parts[k], '— none —'));
+  // Dealership: a column in the file, or one dealership for the whole file.
+  const dsel = document.getElementById('smDealer');
+  const fixed = (allDealers.length ? allDealers : []).map(d => `<option value="fixed:${esc(d)}">Whole file: ${esc(d)}</option>`).join('');
+  dsel.innerHTML = fixed + '<option value="fixed:">Whole file: (no dealership)</option>' +
+    smart.cols.map(c => `<option value="${c.i}">Column: ${esc(c.h)}</option>`).join('');
+  let dv = dealerCol ? String(dealerCol.i) : '';
+  if(!dv){
+    const known = smart.distCode && smart.distMap ? smart.distMap[smart.distCode] : '';
+    const od = (() => { try{ return localStorage.getItem('gd_office_dealer_v1') || ''; }catch(e){ return ''; } })();
+    const d = known || od || allDealers[0] || '';
+    dv = 'fixed:' + (allDealers.find(x => sameDealer(x, d)) || '');
+  }
+  dsel.value = dv;
+  if(saved){
+    ['smName','smMobile','smPhone2','smCons','smAddr1','smAddr2','smAddr3','smAddr4','smAddr5','smDealer'].forEach(id => {
+      if(saved[id] != null && [...document.getElementById(id).options].some(o => o.value === saved[id])) document.getElementById(id).value = saved[id];
+    });
+  }
+  document.getElementById('smartInfo').innerHTML =
+    `Header found on row <b>${smart.headerIdx + 1}</b> · ${smart.data.length.toLocaleString('en-IN')} rows · ${smart.cols.length} columns` +
+    (smart.distCode ? ` · Distributor code <b>${esc(smart.distCode)}</b>` : '') +
+    (smart.distCode && !(smart.distMap && smart.distMap[smart.distCode]) && !dealerCol ? `<br>⚠️ <b>Check the 🏪 Dealership</b> below for distributor code ${esc(smart.distCode)} — it is remembered after this.` : '') +
+    (saved ? ' · <b>✅ Same layout as last time — your choices were reused.</b>' : '');
+  document.getElementById('smartBox').style.display = 'block';
+  smartPreview();
+  // Which dealership a distributor code belongs to (asked once, shared by all office computers).
+  if(smart.distCode && !smart.distMap && isOnline()){
+    api('/api/distcodes').then(d => { smart.distMap = d.map || {}; if(smart.distMap[smart.distCode]) smartGuess(); }).catch(() => { smart.distMap = {}; });
+  }
+}
+function smartRecords(){
+  const g = id => document.getElementById(id).value;
+  const ix = id => g(id) === '' ? -1 : +g(id);
+  const nI = ix('smName'), mI = ix('smMobile'), pI = ix('smPhone2'), cI = ix('smCons');
+  const aI = ['smAddr1','smAddr2','smAddr3','smAddr4','smAddr5'].map(ix).filter(x => x >= 0);
+  const dv = g('smDealer'); const dFixed = dv.startsWith('fixed:') ? dv.slice(6) : null; const dI = dFixed == null ? +dv : -1;
+  // The downloaded Missing list carries its own ID column: those rows are corrected in place.
+  const midCol = smart.cols.find(c => smNorm(c.h).includes('missingid'));
+  const mid = r => midCol ? smCell(r[midCol.i]).replace(/\D/g, '') : '';
+  const good = [], missing = [], seen = {};
+  let skipped = 0;
+  smart.data.forEach(r => {
+    const name = nI >= 0 ? smCell(r[nI]).slice(0, 80) : '';
+    if(!name || /^\d+$/.test(name)){ skipped++; return; }
+    const raw = mI >= 0 ? smCell(r[mI]) : '';
+    const no = smMobile(raw) || (pI >= 0 ? smMobile(r[pI]) : '');
+    const seenA = new Set();
+    const address = aI.map(i => smCell(r[i])).filter(v => v && !/^(0|-|na|n\/a|null|none)$/i.test(v) && !seenA.has(v.toLowerCase()) && seenA.add(v.toLowerCase())).join(', ').slice(0, 300);
+    const consumerNo = cI >= 0 ? smCell(r[cI]).replace(/\.0+$/, '') : '';
+    const dealer = dFixed != null ? dFixed : smCell(r[dI]);
+    if(!no){ missing.push({name, address, dealer, badMobile: raw, consumerNo, id: mid(r)}); return; }
+    const rec = {name, no, address, dealer, consumerNo, missingId: mid(r)};
+    const sk = no + '|' + dealer.toLowerCase();
+    if(seen[sk] !== undefined) good[seen[sk]] = rec; else { seen[sk] = good.length; good.push(rec); }
+  });
+  return {good, missing, skipped};
+}
+function smartPreview(){
+  const {good, missing, skipped} = smartRecords();
+  smart.result = {good, missing, skipped};
+  document.getElementById('smartCounts').innerHTML =
+    `✅ <b>${good.length.toLocaleString('en-IN')}</b> customers with a mobile · 📵 <b>${missing.length.toLocaleString('en-IN')}</b> without a mobile (go to the Missing list)` +
+    (skipped ? ` · skipped <b>${skipped.toLocaleString('en-IN')}</b> rows with no name` : '');
+  document.getElementById('smartBody').innerHTML = good.slice(0, 8).map(c => `<tr><td>${esc(c.name)}</td><td>${esc(c.no)}</td><td>${esc(c.address)}</td><td>${esc(c.consumerNo)}</td><td>${esc(c.dealer)}</td></tr>`).join('') ||
+    '<tr><td colspan="5" class="hint">No customers with a mobile number — check the 📞 Mobile column.</td></tr>';
+}
+function smartCancel(){ smart = null; document.getElementById('smartBox').style.display = 'none'; }
+function smartUse(){
+  if(!smart || !smart.result) return;
+  const errEl = document.getElementById('custError');
+  if(document.getElementById('smName').value === '' || document.getElementById('smMobile').value === ''){ errEl.textContent = 'Choose the 👤 Name and 📞 Mobile columns first.'; return; }
+  errEl.textContent = '';
+  // Remember this layout for next time.
+  try{
+    const all = JSON.parse(localStorage.getItem(SMART_STORE) || '{}');
+    all[smart.sig] = {};
+    ['smName','smMobile','smPhone2','smCons','smAddr1','smAddr2','smAddr3','smAddr4','smAddr5','smDealer'].forEach(id => all[smart.sig][id] = document.getElementById(id).value);
+    localStorage.setItem(SMART_STORE, JSON.stringify(all));
+  }catch(e){}
+  const dv = document.getElementById('smDealer').value;
+  if(smart.distCode && dv.startsWith('fixed:') && dv.slice(6) && isOnline())
+    api('/api/distcodes', {method:'POST', body:{code: smart.distCode, dealer: dv.slice(6)}}).catch(() => {});
+  const {good, missing} = smart.result;
+  const fileName = smart.file;
+  smartCancel();
+  if(!good.length && !missing.length){ errEl.textContent = 'No customers could be read with these columns.'; return; }
+  pendingMissing = missing;
+  pendingCustomers = good;
+  document.getElementById('custPendingText').innerHTML =
+    `📄 <b>${good.length.toLocaleString('en-IN')}</b> customer${good.length===1?'':'s'} read from <b>${esc(fileName)}</b>. Customers already saved (same mobile and dealership) are updated, the rest are added.` +
+    (missing.length ? `<br>📵 <b>${missing.length.toLocaleString('en-IN')}</b> without a mobile number — ${isOnline() ? 'they go to the <b>Missing mobile number</b> list below.' : 'connect to the online database to keep them aside.'}` : '') +
+    `<br><b>Not saved yet</b> — press Save customers to keep them.`;
+  document.getElementById('custPending').style.display = 'block';
 }
 
 let pendingCustomers = null; // read from a file, waiting for the Save button
@@ -3250,7 +3442,7 @@ async function exportCustomers(){
     }catch(e){ toast('Could not export: ' + e.message); return; }
   }
   if(!list.length){ toast('No customers to export'); return; }
-  const rows = [CUST_EXPORT_HEADERS].concat(list.map(c => [c.name, c.no, c.address, c.dealer, c.code]));
+  const rows = [CUST_EXPORT_HEADERS].concat(list.map(c => [c.name, c.no, c.address, c.dealer, c.code, c.consumerNo || '']));
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!cols'] = [{wch:22},{wch:16},{wch:45},{wch:22},{wch:16}];
   const wb = XLSX.utils.book_new();

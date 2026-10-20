@@ -70,6 +70,17 @@ export default async (req) => {
   try {
     if (what === "whoami" && m === "GET") return json({ role });
     if (what === "dealers" && m === "GET") return json({ dealers: await listDealers() });
+    // Distributor codes seen in oil-company reports → our dealership names.
+    if (what === "distcodes") {
+      if (!isAdmin) return adminOnly();
+      let map = {};
+      try { map = JSON.parse((await getMeta("distcodes")) || "{}"); } catch (e) {}
+      if (m === "POST") {
+        const code = String(body.code || "").replace(/\D/g, "").slice(0, 20);
+        if (code) { map[code] = String(body.dealer || "").slice(0, 80); await setMeta("distcodes", JSON.stringify(map)); }
+      }
+      return json({ map });
+    }
     if (what === "cancellations" && m === "GET") {
       if (!isAdmin) return adminOnly();
       return json({ list: await listCancellations({ from: p.get("from") || null, to: p.get("to") || null, dealer: p.get("dealer") || "" }) });

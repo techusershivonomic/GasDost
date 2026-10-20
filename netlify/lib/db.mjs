@@ -71,6 +71,7 @@ const ms = (d) => (d ? new Date(d).getTime() : null);
 function customerOut(r) {
   return {
     no: r.no, mobile: mobileOf(r.no), name: r.name, address: r.address, dealer: r.dealer, code: r.code, token: r.token,
+    consumerNo: r.consumer_no || "",
     updated: ms(r.updated_at),
     location: r.lat != null ? { lat: r.lat, lng: r.lng, at: ms(r.loc_at) } : null,
   };
@@ -101,14 +102,14 @@ export async function searchCustomers({ text = "", offset = 0, limit = 100, deal
     SELECT count(*)::int AS n FROM customers c
     WHERE c.deleted_at IS NULL AND (${where.t} = '' OR (${where.digits} <> '' AND c.no LIKE ${where.digits + "%"})
        OR c.name ILIKE ${where.like} OR c.address ILIKE ${where.like}
-       OR c.dealer ILIKE ${where.like} OR c.code ILIKE ${where.like})
+       OR c.dealer ILIKE ${where.like} OR c.code ILIKE ${where.like} OR (${where.digits} <> '' AND c.consumer_no = ${where.digits}))
       AND (${dl} = '' OR lower(trim(c.dealer)) = ${dl})`;
   const rows = await q`
     SELECT c.*, l.lat, l.lng, l.at AS loc_at FROM customers c
     LEFT JOIN locations l ON l.no = c.no
     WHERE c.deleted_at IS NULL AND (${where.t} = '' OR (${where.digits} <> '' AND c.no LIKE ${where.digits + "%"})
        OR c.name ILIKE ${where.like} OR c.address ILIKE ${where.like}
-       OR c.dealer ILIKE ${where.like} OR c.code ILIKE ${where.like})
+       OR c.dealer ILIKE ${where.like} OR c.code ILIKE ${where.like} OR (${where.digits} <> '' AND c.consumer_no = ${where.digits}))
       AND (${dl} = '' OR lower(trim(c.dealer)) = ${dl})
     ORDER BY length(c.code) NULLS LAST, c.code, c.no  -- C9999 before C10000
     OFFSET ${offset} LIMIT ${limit}`;
@@ -154,7 +155,8 @@ export async function upsertCustomers(incoming) {
     const key = normKey(raw.no);
     const name = clean(raw.name, 80);
     if (!isKey(key) || !name) { invalid++; continue; }
-    const rec = { mobile: mobileOf(key), key, name, address: clean(raw.address, 300), dealer: clean(raw.dealer, 80) };
+    const rec = { mobile: mobileOf(key), key, name, address: clean(raw.address, 300), dealer: clean(raw.dealer, 80),
+                  cn: String(raw.consumerNo || "").replace(/[^0-9A-Za-z-]/g, "").slice(0, 30) };
     if (/^\d{1,15}$/.test(String(raw.missingId || ""))) fromMissing.push(String(raw.missingId));
     // A full key (…-2) given back by the app updates exactly that customer.
     seen.set(key.length > 10 ? "k:" + key : rec.mobile + "|" + dkey(rec.dealer), rec);
@@ -181,21 +183,22 @@ export async function upsertCustomers(incoming) {
   if (upd.length) {
     await q`
       UPDATE customers c SET name = u.name, address = u.address, dealer = u.dealer, updated_at = now(),
+        consumer_no = CASE WHEN u.cn <> '' THEN u.cn ELSE c.consumer_no END,
         deleted_at = NULL, deleted_by = NULL
       FROM unnest(${upd.map((r) => r.no)}::text[], ${upd.map((r) => r.name)}::text[],
-                  ${upd.map((r) => r.address)}::text[], ${upd.map((r) => r.dealer)}::text[])
-           AS u(no, name, address, dealer)
+                  ${upd.map((r) => r.address)}::text[], ${upd.map((r) => r.dealer)}::text[], ${upd.map((r) => r.cn)}::text[])
+           AS u(no, name, address, dealer, cn)
       WHERE c.no = u.no`;
   }
   if (add.length) {
     await q`
-      INSERT INTO customers (no, name, address, dealer, token, code)
-      SELECT s.no, s.name, s.address, s.dealer, s.token,
+      INSERT INTO customers (no, name, address, dealer, token, consumer_no, code)
+      SELECT s.no, s.name, s.address, s.dealer, s.token, s.cn,
              'C' || lpad(s.n::text, GREATEST(4, length(s.n::text)), '0')   -- C0001 … C9999, C10000 …
       FROM (SELECT u.*, nextval('customer_code_seq') AS n
             FROM unnest(${add.map((r) => r.no)}::text[], ${add.map((r) => r.name)}::text[],
                         ${add.map((r) => r.address)}::text[], ${add.map((r) => r.dealer)}::text[],
-                        ${add.map(() => newToken())}::text[]) WITH ORDINALITY AS u(no, name, address, dealer, token, ord)
+                        ${add.map(() => newToken())}::text[], ${add.map((r) => r.cn)}::text[]) WITH ORDINALITY AS u(no, name, address, dealer, token, cn, ord)
             ORDER BY u.ord) s
       ON CONFLICT (no) DO NOTHING`;
   }
@@ -217,7 +220,8 @@ export async function addMissing(list) {
   for (const r of list.slice(0, 2000)) {
     const name = clean(r.name, 80);
     if (!name) continue;
-    const rec = { name, address: clean(r.address, 300), dealer: clean(r.dealer, 80), bad: clean(r.badMobile, 30) };
+    const rec = { name, address: clean(r.address, 300), dealer: clean(r.dealer, 80), bad: clean(r.badMobile, 30),
+                  cn: String(r.consumerNo || "").replace(/[^0-9A-Za-z-]/g, "").slice(0, 30) };
     // A row from the downloaded list (it has its ID): correct that row in place.
     if (/^\d{1,15}$/.test(String(r.id || ""))) {
       try {
@@ -234,9 +238,9 @@ export async function addMissing(list) {
   }
   if (!rows.length) return { added: 0, corrected };
   const res = await q`
-    INSERT INTO missing_mobile (name, address, dealer, bad_mobile)
+    INSERT INTO missing_mobile (name, address, dealer, bad_mobile, consumer_no)
     SELECT * FROM unnest(${rows.map((r) => r.name)}::text[], ${rows.map((r) => r.address)}::text[],
-                         ${rows.map((r) => r.dealer)}::text[], ${rows.map((r) => r.bad)}::text[])
+                         ${rows.map((r) => r.dealer)}::text[], ${rows.map((r) => r.bad)}::text[], ${rows.map((r) => r.cn)}::text[])
     ON CONFLICT DO NOTHING RETURNING id`;
   return { added: res.length, already: rows.length - res.length, corrected };
 }
@@ -263,7 +267,7 @@ export async function listMissing({ text = "", offset = 0, limit = 100, dealer =
     GROUP BY lower(trim(dealer)) ORDER BY 2 DESC LIMIT 300`;
   return {
     total: n, all, dealers: dealers.map((d) => ({ dealer: d.dealer || "", n: d.n })),
-    rows: rows.map((r) => ({ id: String(r.id), name: r.name, address: r.address, dealer: r.dealer, badMobile: r.bad_mobile })),
+    rows: rows.map((r) => ({ id: String(r.id), name: r.name, address: r.address, dealer: r.dealer, badMobile: r.bad_mobile, consumerNo: r.consumer_no || "" })),
   };
 }
 // The office typed the number: the person becomes a normal customer. If that
@@ -280,7 +284,7 @@ export async function fixMissing(id, rawNo, force = false, by = "Office") {
   const same = (await q`SELECT no, name, address, dealer FROM customers WHERE left(no, 10) = ${no} AND deleted_at IS NULL`)
     .find((c) => dkey(c.dealer) === dkey(m.dealer));
   if (same && !force) return { taken: { no: mobileOf(same.no), name: same.name, address: same.address, dealer: same.dealer } };
-  const r = await upsertCustomers([{ no, name: m.name, address: m.address, dealer: m.dealer }]);
+  const r = await upsertCustomers([{ no, name: m.name, address: m.address, dealer: m.dealer, consumerNo: m.consumer_no || "" }]);
   await q`DELETE FROM missing_mobile WHERE id = ${id}`;
   await q`INSERT INTO missing_filled (no, name, dealer, by) VALUES (${no}, ${m.name}, ${m.dealer}, ${clean(by, 80)})`;
   await q`DELETE FROM missing_filled WHERE at < now() - interval '180 days'`;
