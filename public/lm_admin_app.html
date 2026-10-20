@@ -155,7 +155,7 @@
 <header>
   <h1>⛽ GasDost — Admin</h1>
   <span class="badge">Desktop console</span>
-  <span class="badge" id="buildBadge" title="Version of the office console" style="opacity:.85;">Build 64 · 20 Oct 2026</span>
+  <span class="badge" id="buildBadge" title="Version of the office console" style="opacity:.85;">Build 65 · 20 Oct 2026</span>
   <span style="flex:1;"></span>
   <label id="officeDealerWrap" style="display:none;align-items:center;gap:6px;color:#fff;font-size:12.5px;font-weight:600;margin-right:8px;" title="Dealership this computer works for. Every dealership filter starts from it.">🏪 This computer
     <select id="officeDealer" onchange="setOfficeDealer(this.value)" style="padding:5px 8px;border-radius:8px;border:none;font-size:12.5px;max-width:200px;"><option value="">All dealerships</option></select></label>
@@ -515,6 +515,12 @@
         <label>🏪 Dealership<select id="smDealer" onchange="smartNewDealer(this);smartDealerMap();smartPreview()"></select></label>
       </div>
       <div id="smDealerMap" class="dealer-map" style="display:none;"></div>
+      <div class="dealer-map" style="display:block;">
+        <b>Customers already saved (same mobile and dealership):</b>
+        <label style="display:block;margin-top:6px;font-weight:500;"><input type="radio" name="smMode" value="update" checked> ✏️ Update their name, address and consumer no. from this file</label>
+        <label style="display:block;margin-top:4px;font-weight:500;"><input type="radio" name="smMode" value="add"> 🔒 Don't change them — only add new customers</label>
+        <div class="hint">Either way, a customer whose <b>consumer no.</b> is already saved under another mobile is moved to the new mobile — not added twice.</div>
+      </div>
       <div class="hint" id="smartCounts"></div>
       <div style="overflow-x:auto;"><table style="margin-top:6px;">
         <thead><tr><th>Name</th><th>Mobile</th><th>Address</th><th>Consumer no.</th><th>Dealership</th></tr></thead>
@@ -2895,18 +2901,21 @@ function smartUse(){
     api('/api/distcodes', {method:'POST', body:{code: smart.distCode, dealer: dv.slice(6)}}).catch(() => {});
   const {good, missing} = smart.result;
   const fileName = smart.file;
+  pendingAddOnly = (document.querySelector('input[name=smMode]:checked') || {}).value === 'add';
   smartCancel();
   if(!good.length && !missing.length){ errEl.textContent = 'No customers could be read with these columns.'; return; }
   pendingMissing = missing;
   pendingCustomers = good;
   document.getElementById('custPendingText').innerHTML =
-    `📄 <b>${good.length.toLocaleString('en-IN')}</b> customer${good.length===1?'':'s'} read from <b>${esc(fileName)}</b>. Customers already saved (same mobile and dealership) are updated, the rest are added.` +
+    `📄 <b>${good.length.toLocaleString('en-IN')}</b> customer${good.length===1?'':'s'} read from <b>${esc(fileName)}</b>. ` +
+    (pendingAddOnly ? 'Customers already saved are <b>left unchanged</b>; only new ones are added.' : 'Customers already saved (same mobile and dealership) are updated, the rest are added.') +
     (missing.length ? `<br>📵 <b>${missing.length.toLocaleString('en-IN')}</b> without a mobile number — ${isOnline() ? 'they go to the <b>Missing mobile number</b> list below.' : 'connect to the online database to keep them aside.'}` : '') +
     `<br><b>Not saved yet</b> — press Save customers to keep them.`;
   document.getElementById('custPending').style.display = 'block';
 }
 
 let pendingCustomers = null; // read from a file, waiting for the Save button
+let pendingAddOnly = false;  // "only add new customers" chosen in the smart import
 let pendingMissing = [];     // rows with a name but no mobile, from the same file
 
 /* ---------------- Online database ----------------
@@ -2950,11 +2959,11 @@ function noteCustomers(list){
 }
 
 // Sends customers to the database 2,000 at a time, so 80,000 is fine.
-async function uploadCustomersInParts(list, onProgress){
-  const tot = {added:0, updated:0, invalid:0};
+async function uploadCustomersInParts(list, onProgress, addOnly){
+  const tot = {added:0, updated:0, invalid:0, kept:0, renamed:0};
   for(let i = 0; i < list.length; i += 2000){
-    const d = await api('/api/customers', {method:'POST', body:{customers: list.slice(i, i + 2000)}});
-    tot.added += d.added; tot.updated += d.updated; tot.invalid += d.invalid;
+    const d = await api('/api/customers', {method:'POST', body:{customers: list.slice(i, i + 2000), addOnly: !!addOnly}});
+    tot.added += d.added; tot.updated += d.updated; tot.invalid += d.invalid; tot.kept += d.kept || 0; tot.renamed += d.renamed || 0;
     if(onProgress) onProgress(Math.min(i + 2000, list.length), list.length);
   }
   return tot;
@@ -3122,7 +3131,7 @@ async function savePendingCustomers(){
       const txt = document.getElementById('custPendingText');
       const d = pendingCustomers.length ? await uploadCustomersInParts(pendingCustomers, (done, all) => {
         txt.innerHTML = `⏳ Saving… <b>${done.toLocaleString()}</b> of ${all.toLocaleString()}. Please keep this page open.`;
-      }) : {added:0, updated:0, invalid:0};
+      }, pendingAddOnly) : {added:0, updated:0, invalid:0, kept:0, renamed:0};
       let kept = 0, corrected = 0;
       for(let i = 0; i < pendingMissing.length; i += 2000){
         const m = await api('/api/missing', {method:'POST', body:{rows: pendingMissing.slice(i, i + 2000)}});
@@ -3136,7 +3145,8 @@ async function savePendingCustomers(){
       custTotalAll = t.total;
       const sum = document.getElementById('custSummary');
       sum.style.display = 'block';
-      sum.textContent = `✅ Saved online: ${d.added.toLocaleString()} new customer${d.added===1?'':'s'}` + (d.updated ? `, updated ${d.updated.toLocaleString()}` : '') + `. Total now ${custTotalAll.toLocaleString()}.` +
+      sum.textContent = `✅ Saved online: ${d.added.toLocaleString()} new customer${d.added===1?'':'s'}` + (d.updated ? `, updated ${d.updated.toLocaleString()}` : '') +
+        (d.kept ? `, ${d.kept.toLocaleString()} already saved left unchanged` : '') + (d.renamed ? `, ${d.renamed.toLocaleString()} moved to their new mobile (same consumer no.)` : '') + `. Total now ${custTotalAll.toLocaleString()}.` +
         (missingCount ? ` 📵 ${missingCount.toLocaleString()} without a mobile number kept aside` +
           (corrected ? ` (${corrected.toLocaleString()} corrected in place)` : (kept < missingCount ? ` (${(missingCount - kept).toLocaleString()} were already there)` : '')) + '.' : '');
       renderCustomers(); renderBookingSearch(); loadRecipients(); loadMissing();

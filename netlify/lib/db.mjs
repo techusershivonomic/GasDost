@@ -145,7 +145,7 @@ function keyFor(mobile, dealer, existing, taken) {
 
 // Add / update customers. New ones get the next code in file order; existing
 // ones keep their code and link. Never burns a code on an existing customer.
-export async function upsertCustomers(incoming) {
+export async function upsertCustomers(incoming, opts = {}) {
   // Same mobile + same dealership = the same customer (last row wins);
   // same mobile with another dealership = another customer.
   const seen = new Map();
@@ -163,11 +163,34 @@ export async function upsertCustomers(incoming) {
   }
   const incomingRows = [...seen.values()];
   if (!incomingRows.length) return { added: 0, updated: 0, invalid };
+  // Same consumer number + same dealership already saved under another mobile:
+  // it is the same customer with a new number — move that record to the new
+  // number (with its pin and booking) instead of making a second customer.
+  let renamed = 0;
+  const cnRows = incomingRows.filter((r) => r.cn && r.key.length <= 10);
+  if (cnRows.length) {
+    const ex = await q`SELECT no, dealer, consumer_no FROM customers WHERE consumer_no = ANY(${cnRows.map((r) => r.cn)}) AND deleted_at IS NULL`;
+    for (const r of cnRows) {
+      const e = ex.find((x) => x.consumer_no === r.cn && dkey(x.dealer) === dkey(r.dealer));
+      if (!e || mobileOf(e.no) === r.mobile) continue;
+      const clash = await q`SELECT no, dealer FROM customers WHERE left(no, 10) = ${r.mobile}`;
+      if (clash.some((c) => dkey(c.dealer) === dkey(r.dealer))) continue; // that number already has its own record
+      const taken = new Set(clash.map((c) => c.no));
+      let nk = "";
+      for (let i = 1; i < 100 && !nk; i++) { const k = i === 1 ? r.mobile : r.mobile + "-" + i; if (!taken.has(k)) nk = k; }
+      if (!nk) continue;
+      await q`UPDATE customers SET no = ${nk}, updated_at = now() WHERE no = ${e.no}`;
+      await q`UPDATE locations SET no = ${nk} WHERE no = ${e.no} AND NOT EXISTS (SELECT 1 FROM locations WHERE no = ${nk})`;
+      await q`UPDATE bookings SET no = ${nk} WHERE no = ${e.no} AND NOT EXISTS (SELECT 1 FROM bookings WHERE no = ${nk})`;
+      renamed++;
+    }
+  }
   const mobiles = [...new Set(incomingRows.map((r) => r.mobile))];
   const existingRows = await q`SELECT no, dealer FROM customers WHERE left(no, 10) = ANY(${mobiles})`;
   const taken = new Set(existingRows.map((r) => r.no));
   const live = existingRows.slice();
   const upd = [], add = [];
+  let kept = 0;
   for (const r of incomingRows) {
     if (r.key.length > 10) {
       if (taken.has(r.key)) upd.push({ ...r, no: r.key });
@@ -176,7 +199,7 @@ export async function upsertCustomers(incoming) {
     }
     const k = keyFor(r.mobile, r.dealer, live, taken);
     if (!k.no) { invalid++; continue; }
-    if (k.exists) upd.push({ ...r, no: k.no });
+    if (k.exists) { if (!opts.addOnly) upd.push({ ...r, no: k.no }); else kept++; }
     else { add.push({ ...r, no: k.no }); taken.add(k.no); live.push({ no: k.no, dealer: r.dealer }); }
   }
   const rows = upd.concat(add);
@@ -209,7 +232,7 @@ export async function upsertCustomers(incoming) {
     USING unnest(${rows.map((r) => r.name.toLowerCase())}::text[], ${rows.map((r) => r.address.toLowerCase())}::text[],
                  ${rows.map((r) => r.dealer.toLowerCase())}::text[]) AS u(name, address, dealer)
     WHERE lower(m.name) = u.name AND lower(m.address) = u.address AND lower(m.dealer) = u.dealer`;
-  return { added: add.length, updated: upd.length, invalid };
+  return { added: add.length, updated: upd.length, invalid, kept, renamed };
 }
 
 /* ---------------- customers without a mobile number ---------------- */
@@ -317,6 +340,14 @@ export async function deleteCustomer(no, by = "") {
   const r = await q`UPDATE customers SET deleted_at = now(), deleted_by = ${by} WHERE no = ${no} AND deleted_at IS NULL RETURNING name`;
   if (r.length) await logDelete("delete", 1, by, (r[0].name || "") + " · " + mobileOf(no));
   await purgeBin();
+  return r.length;
+}
+// Many at once (e.g. removing duplicates): all go to the recycle bin, one history line.
+export async function deleteCustomers(nos, by = "", note = "") {
+  const keys = [...new Set((nos || []).map(normKey).filter(isKey))].slice(0, 2000);
+  if (!keys.length) return 0;
+  const r = await q`UPDATE customers SET deleted_at = now(), deleted_by = ${by} WHERE no = ANY(${keys}) AND deleted_at IS NULL RETURNING no`;
+  if (r.length) await logDelete("delete", r.length, by, clean(note || "Several customers", 200));
   return r.length;
 }
 export async function deleteAllCustomers(by = "") {

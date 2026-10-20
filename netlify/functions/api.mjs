@@ -49,7 +49,7 @@
 
 import {
   roleOf, staffKey, json, isPartner, normKey,
-  searchCustomers, upsertCustomers, deleteCustomer, restoreCustomers, listBin, deleteLog, checkPin, changePin, addMissing, listMissing, fixMissing, missingFilled, deleteMissing, clearMissing, deleteAllCustomers, lookupCustomers, ensureTokens,
+  searchCustomers, upsertCustomers, deleteCustomer, deleteCustomers, restoreCustomers, listBin, deleteLog, checkPin, changePin, addMissing, listMissing, fixMissing, missingFilled, deleteMissing, clearMissing, deleteAllCustomers, lookupCustomers, ensureTokens,
   newBookings, applyOps, syncForPhone, listBookings, statusSummary, bookingsBehind, deliveryHistory, customerDeliveries, listDealers, dealerSummary, linkTracker, trackerList,
   listCancellations, ncStock, ncStockFor, ncMoveStock, ncStockLog, ncCreate, ncList, ncPhoto, ncSetStatus, ncCash,
   pingTeam, newPairCode, listTeam, deleteTeam, logoutTeam, removeTeam, teamNames, logoutAtFor, getMeta, setMeta, importOld,
@@ -132,7 +132,7 @@ export default async (req) => {
       if (m === "POST") {
         const list = Array.isArray(body.customers) ? body.customers : [];
         if (list.length > 2000) return json({ error: "Send at most 2,000 customers at a time" }, 400);
-        return json(await upsertCustomers(list));
+        return json(await upsertCustomers(list, { addOnly: body.addOnly === true }));
       }
       if (m === "DELETE") {
         // Every delete needs the Delete PIN.
@@ -140,6 +140,7 @@ export default async (req) => {
         if (!pin.ok) return json({ error: pin.locked ? `Too many wrong PINs. Deleting is locked for ${pin.locked} minute(s).`
           : pin.notSet ? "No Delete PIN is set up yet." : `Wrong Delete PIN.${pin.left ? ` ${pin.left} tries left.` : ""}`, pinError: true }, 403);
         if (id) return json({ ok: true, deleted: await deleteCustomer(normKey(decodeURIComponent(id)), by) });
+        if (Array.isArray(body.nos)) return json({ ok: true, deleted: await deleteCustomers(body.nos, by, body.note) });
         if (body.confirm !== "DELETE ALL") return json({ error: "Not confirmed" }, 400);
         return json({ ok: true, deleted: await deleteAllCustomers(by) });
       }
