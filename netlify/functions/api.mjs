@@ -112,7 +112,7 @@ export default async (req) => {
           : `Wrong Delete PIN.${c.left ? ` ${c.left} tries left.` : ""}`, pinError: true }, 403);
       }
       if (m === "GET") {
-        return json(await searchCustomers({ text: p.get("q") || "", offset: +p.get("offset") || 0, limit: +p.get("limit") || 100 }));
+        return json(await searchCustomers({ text: p.get("q") || "", offset: +p.get("offset") || 0, limit: +p.get("limit") || 100, dealer: p.get("dealer") || "" }));
       }
       if (m === "POST") {
         const list = Array.isArray(body.customers) ? body.customers : [];

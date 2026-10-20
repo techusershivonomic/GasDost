@@ -89,7 +89,8 @@ function bookingOut(r) {
 
 // Search / page through customers. Digits search the mobile number; anything
 // else searches name, address, dealer and code.
-export async function searchCustomers({ text = "", offset = 0, limit = 100 }) {
+export async function searchCustomers({ text = "", offset = 0, limit = 100, dealer = "" }) {
+  const dl = dkey(dealer);
   const t = clean(text, 80);
   const digits = /^\d+$/.test(t) ? t : "";
   const like = "%" + t.replace(/[%_\\]/g, (m) => "\\" + m) + "%";
@@ -100,13 +101,15 @@ export async function searchCustomers({ text = "", offset = 0, limit = 100 }) {
     SELECT count(*)::int AS n FROM customers c
     WHERE c.deleted_at IS NULL AND (${where.t} = '' OR (${where.digits} <> '' AND c.no LIKE ${where.digits + "%"})
        OR c.name ILIKE ${where.like} OR c.address ILIKE ${where.like}
-       OR c.dealer ILIKE ${where.like} OR c.code ILIKE ${where.like})`;
+       OR c.dealer ILIKE ${where.like} OR c.code ILIKE ${where.like})
+      AND (${dl} = '' OR lower(trim(c.dealer)) = ${dl})`;
   const rows = await q`
     SELECT c.*, l.lat, l.lng, l.at AS loc_at FROM customers c
     LEFT JOIN locations l ON l.no = c.no
     WHERE c.deleted_at IS NULL AND (${where.t} = '' OR (${where.digits} <> '' AND c.no LIKE ${where.digits + "%"})
        OR c.name ILIKE ${where.like} OR c.address ILIKE ${where.like}
        OR c.dealer ILIKE ${where.like} OR c.code ILIKE ${where.like})
+      AND (${dl} = '' OR lower(trim(c.dealer)) = ${dl})
     ORDER BY length(c.code) NULLS LAST, c.code, c.no  -- C9999 before C10000
     OFFSET ${offset} LIMIT ${limit}`;
   return { total: n, customers: rows.map(customerOut) };

@@ -607,6 +607,7 @@
       </div>
     </div>
     <div class="hint">When a customer shares their location it comes back to this number on WhatsApp, so put the delivery man who is doing that round.</div>
+    <div class="hint" id="sendDealerNote" style="display:none;"></div>
   </div>
 
   <div class="card" style="grid-column:1 / -1;">
@@ -919,6 +920,7 @@ function loadRecipients(){
   const search = document.getElementById('sendSearch');
   if(search) search.value = '';
   const mode = document.getElementById('sendSource').value;
+  renderSendDealerNote();
   if(mode === 'batch'){
     recipients = batch.map(b => ({no:b.n, name:b.m, booking:b.b, address:b.a, dealer:b.g}));
   } else if(mode === 'customers'){
@@ -934,18 +936,34 @@ function loadRecipients(){
   renderSendList();
 }
 
+// Send links follows this computer's dealership ('' = all).
+function sendDealer(){
+  let od = ''; try{ od = localStorage.getItem('gd_office_dealer_v1') || ''; }catch(e){}
+  return od && !loadRecipients.showAll ? od : '';
+}
+function renderSendDealerNote(){
+  const n = document.getElementById('sendDealerNote'); if(!n) return;
+  let od = ''; try{ od = localStorage.getItem('gd_office_dealer_v1') || ''; }catch(e){}
+  if(!od){ n.style.display = 'none'; return; }
+  n.style.display = 'block';
+  n.innerHTML = sendDealer()
+    ? '🏪 Showing only <b>' + esc(od) + '</b> customers (🏪 This computer). <a href="#" onclick="loadRecipients.showAll=true;loadRecipients();return false;">Show all dealerships</a>'
+    : '🏪 Showing all dealerships. <a href="#" onclick="loadRecipients.showAll=false;loadRecipients();return false;">Show only ' + esc(od) + '</a>';
+}
 async function loadRecipientsOnline(mode){
   recipients = [];
   renderSendList();
+  const sd = sendDealer();
+  const keep = x => !sd || String(x.dealer || '').trim().toLowerCase() === sd.trim().toLowerCase();
   try{
     if(mode === 'customers'){
-      const d = await api('/api/customers?limit=1000');
+      const d = await api('/api/customers?limit=1000' + (sd ? '&dealer=' + encodeURIComponent(sd) : ''));
       noteCustomers(d.customers);
       recipients = d.customers.map(c => ({no:c.no, name:c.name, booking:'', address:c.address, dealer:c.dealer}));
       if(d.total > 1000) toast('Showing the first 1,000 of ' + d.total.toLocaleString() + ' customers — type in "Find a customer" to reach anyone else');
     } else {
       const d = await api('/api/bookings?filter=' + (mode === 'pending' ? 'pending' : 'all') + '&limit=2000');
-      recipients = d.bookings.map(b => ({no:b.no, name:b.name, booking:b.booking, address:b.address, dealer:b.dealer, linkSentAt:b.linkSentAt}));
+      recipients = d.bookings.filter(keep).map(b => ({no:b.no, name:b.name, booking:b.booking, address:b.address, dealer:b.dealer, linkSentAt:b.linkSentAt}));
       d.bookings.forEach(b => { if(typeof b.lat === 'number' && b.status !== 'waiting') locMap[b.no] = {no:b.no, lat:b.lat, lng:b.lng, at:b.updated}; });
     }
   }catch(e){ toast('Could not load the list: ' + e.message); }
@@ -982,7 +1000,7 @@ function sendSearchInput(){
     try{
       let found = [];
       if(mode === 'customers'){
-        found = (await api('/api/customers?q=' + encodeURIComponent(digits.length >= 4 && digits.length === raw.replace(/\s/g, '').length ? digits : raw) + '&limit=100')).customers;
+        found = (await api('/api/customers?q=' + encodeURIComponent(digits.length >= 4 && digits.length === raw.replace(/\s/g, '').length ? digits : raw) + '&limit=100' + (sendDealer() ? '&dealer=' + encodeURIComponent(sendDealer()) : ''))).customers;
       } else if(isValidMobileNo(digits)){
         found = (await api('/api/lookup', {method:'POST', body:{nos:[digits]}})).customers;
       }
@@ -3289,6 +3307,7 @@ function setOfficeDealer(d){
   });
   toast('🏪 This computer: ' + (d || 'All dealerships'));
   try{ renderDealers.showAll = false; renderDealers(); refreshOnline(); }catch(e){}
+  try{ loadRecipients.showAll = false; if(document.getElementById('tab-send').classList.contains('active')) loadRecipients(); }catch(e){}
   try{ missingOffset = 0; loadMissing(); }catch(e){}
   try{ renderTracker(); }catch(e){}
   try{ if(document.getElementById('tab-newconn').classList.contains('active')) loadNc(); }catch(e){}
