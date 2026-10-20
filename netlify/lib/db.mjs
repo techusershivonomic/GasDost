@@ -685,6 +685,7 @@ export async function listDealers() {
   const rows = await q`
     SELECT DISTINCT trim(dealer) AS dealer FROM customers WHERE trim(dealer) <> '' AND deleted_at IS NULL
     UNION SELECT DISTINCT trim(dealer) FROM deliveries WHERE trim(dealer) <> ''
+    UNION SELECT DISTINCT trim(dealer) FROM bookings WHERE trim(dealer) <> '' AND NOT deleted
     ORDER BY 1 LIMIT 500`;
   // Same name typed in different case counts once.
   const seen = new Map();

@@ -236,6 +236,7 @@
 
     <div id="dealerWrap" style="display:none;margin-top:18px;">
       <h3 class="sub-h">🏪 By dealership</h3>
+      <div class="hint" id="dealerOnlyNote" style="display:none;margin:-4px 0 6px;"></div>
       <table>
         <thead><tr><th>Dealership</th><th class="num">Delivered</th><th class="num">Pending</th><th class="num">📍 Waiting for location</th><th class="num">Total</th><th>Progress</th></tr></thead>
         <tbody id="dealerBody"></tbody>
@@ -1637,9 +1638,22 @@ function buildDeliveryStatusOnline(){
 function renderDealers(){
   const wrap = document.getElementById('dealerWrap');
   if(!wrap) return;
-  const list = isOnline() && serverStatus && serverStatus.dealers ? serverStatus.dealers.slice() : [];
+  let list = isOnline() && serverStatus && serverStatus.dealers ? serverStatus.dealers.slice() : [];
   document.getElementById('menHeading').style.display = list.length ? 'block' : 'none';
   if(!list.length){ wrap.style.display = 'none'; return; }
+  // This computer's dealership: show only that one (unless "Show all" was tapped).
+  let od = '';
+  try{ od = localStorage.getItem('gd_office_dealer_v1') || ''; }catch(e){}
+  const note = document.getElementById('dealerOnlyNote');
+  if(od && !renderDealers.showAll){
+    const same = x => String(x || '').trim().toLowerCase() === od.trim().toLowerCase();
+    list = list.filter(d => same(d.dealer));
+    note.innerHTML = 'Showing only <b>' + esc(od) + '</b> (🏪 This computer). <a href="#" onclick="renderDealers.showAll=true;renderDealers();return false;">Show all dealerships</a>';
+    note.style.display = 'block';
+  } else if(od){
+    note.innerHTML = '<a href="#" onclick="renderDealers.showAll=false;renderDealers();return false;">Show only ' + esc(od) + '</a>';
+    note.style.display = 'block';
+  } else note.style.display = 'none';
   wrap.style.display = 'block';
   list.sort((a, b) => (!a.dealer) - (!b.dealer) || (b.delivered + b.pending) - (a.delivered + a.pending) || a.dealer.localeCompare(b.dealer));
   const btn = (n, view, d) => n ? `<button class="num-btn" onclick='showBookingsBehind("${view}","",${JSON.stringify(d.dealer)})' title="See these bookings">${n}</button>` : '0';
@@ -3264,6 +3278,7 @@ function setOfficeDealer(d){
     applyOfficeDealer(id);
   });
   toast('🏪 This computer: ' + (d || 'All dealerships'));
+  try{ renderDealers.showAll = false; renderDealers(); }catch(e){}
   try{ missingOffset = 0; loadMissing(); }catch(e){}
   try{ renderTracker(); }catch(e){}
   try{ if(document.getElementById('tab-newconn').classList.contains('active')) loadNc(); }catch(e){}
