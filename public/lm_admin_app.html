@@ -155,7 +155,7 @@
 <header>
   <h1>⛽ GasDost — Admin</h1>
   <span class="badge">Desktop console</span>
-  <span class="badge" id="buildBadge" title="Version of the office console" style="opacity:.85;">Build 65 · 20 Oct 2026</span>
+  <span class="badge" id="buildBadge" title="Version of the office console" style="opacity:.85;">Build 66 · 28 Oct 2026</span>
   <span style="flex:1;"></span>
   <label id="officeDealerWrap" style="display:none;align-items:center;gap:6px;color:#fff;font-size:12.5px;font-weight:600;margin-right:8px;" title="Dealership this computer works for. Every dealership filter starts from it.">🏪 This computer
     <select id="officeDealer" onchange="setOfficeDealer(this.value)" style="padding:5px 8px;border-radius:8px;border:none;font-size:12.5px;max-width:200px;"><option value="">All dealerships</option></select></label>
@@ -3110,7 +3110,7 @@ async function showPhoneSetup(){
     const base = location.origin + location.pathname.replace(/[^/]*$/, '');
     const box = document.getElementById('phoneQr');
     box.innerHTML = '';
-    new QRCode(box, {text: base + 'lm_delivery_app.html#staff=' + encodeURIComponent(d.key), width:240, height:240, correctLevel: QRCode.CorrectLevel.M});
+    new QRCode(box, {text: base + 'app#staff=' + encodeURIComponent(d.key), width:240, height:240, correctLevel: QRCode.CorrectLevel.M});
     document.getElementById('phoneQrWrap').style.display = 'flex';
     newPairCode();
   }catch(e){ toast('Could not get the phone key: ' + e.message); }

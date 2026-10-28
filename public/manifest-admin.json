@@ -3,7 +3,7 @@
   "name": "GasDost Admin",
   "short_name": "GasDost Admin",
   "description": "Office console for GasDost: bookings, customers, delivery status.",
-  "start_url": "./lm_admin_app.html",
+  "start_url": "/office",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f4f6f9",

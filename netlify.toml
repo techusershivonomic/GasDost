@@ -6,3 +6,30 @@
 
 [functions]
   node_bundler = "esbuild"
+
+# Short, clean page addresses. The old lm_*.html names keep working too,
+# so phones that already installed the app are not affected.
+[[redirects]]
+  from = "/app"
+  to = "/lm_delivery_app.html"
+  status = 200
+[[redirects]]
+  from = "/app/"
+  to = "/app"
+  status = 301
+[[redirects]]
+  from = "/delivery"
+  to = "/app"
+  status = 301
+[[redirects]]
+  from = "/office"
+  to = "/lm_admin_app.html"
+  status = 200
+[[redirects]]
+  from = "/office/"
+  to = "/office"
+  status = 301
+[[redirects]]
+  from = "/admin"
+  to = "/office"
+  status = 301

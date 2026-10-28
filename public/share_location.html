@@ -293,7 +293,7 @@ function sendViaWhatsApp(){
   msg += '.\n\n' + mapsLink + '\n\n';
 
   const base = location.origin + location.pathname.replace(/[^/]*$/, '');
-  msg += 'Save to app: ' + base + 'lm_delivery_app.html#setloc=' + CUST_NO + ',' + lat + ',' + lng + '\n\n';
+  msg += 'Save to app: ' + base + 'app#setloc=' + CUST_NO + ',' + lat + ',' + lng + '\n\n';
   msg += 'Sent from the GasDost location link.';
 
   const done = document.getElementById('done');

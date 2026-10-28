@@ -3,7 +3,7 @@
   "name": "GasDost",
   "short_name": "GasDost",
   "description": "Delivery app for locating LPG bookings by customer mobile number and tracking live customer locations.",
-  "start_url": "./lm_delivery_app.html",
+  "start_url": "/app",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
