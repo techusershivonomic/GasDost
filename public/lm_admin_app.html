@@ -155,7 +155,7 @@
 <header>
   <h1>⛽ GasDost — Admin</h1>
   <span class="badge">Desktop console</span>
-  <span class="badge" id="buildBadge" title="Version of the office console" style="opacity:.85;">Build 66 · 28 Oct 2026</span>
+  <span class="badge" id="buildBadge" title="Version of the office console" style="opacity:.85;">Build 67 · 3 Nov 2026</span>
   <span style="flex:1;"></span>
   <label id="officeDealerWrap" style="display:none;align-items:center;gap:6px;color:#fff;font-size:12.5px;font-weight:600;margin-right:8px;" title="Dealership this computer works for. Every dealership filter starts from it.">🏪 This computer
     <select id="officeDealer" onchange="setOfficeDealer(this.value)" style="padding:5px 8px;border-radius:8px;border:none;font-size:12.5px;max-width:200px;"><option value="">All dealerships</option></select></label>
@@ -708,7 +708,7 @@
 
     <div style="margin-top:16px;">
       <label for="sendSearch">Find a customer</label>
-      <input type="text" id="sendSearch" placeholder="Type a name or mobile number" oninput="sendSearchInput()" autocomplete="off">
+      <input type="text" id="sendSearch" placeholder="Name, mobile or consumer no." oninput="sendSearchInput()" autocomplete="off">
       <div class="hint" id="searchCount"></div>
     </div>
 
@@ -1067,10 +1067,16 @@ function sendSearchInput(){
     const my = ++sendSearchReq;
     try{
       let found = [];
+      const pureDigits = digits.length >= 4 && digits.length === raw.replace(/\s/g, '').length;
       if(mode === 'customers'){
         found = (await api('/api/customers?q=' + encodeURIComponent(digits.length >= 4 && digits.length === raw.replace(/\s/g, '').length ? digits : raw) + '&limit=100' + (sendDealer() ? '&dealer=' + encodeURIComponent(sendDealer()) : ''))).customers;
-      } else if(isValidMobileNo(digits)){
-        found = (await api('/api/lookup', {method:'POST', body:{nos:[digits]}})).customers;
+      } else {
+        if(isValidMobileNo(digits)) found = (await api('/api/lookup', {method:'POST', body:{nos:[digits]}})).customers;
+        // A consumer number: learn which customer it belongs to, so the list below can show them.
+        if(pureDigits){
+          const byCn = (await api('/api/customers?q=' + encodeURIComponent(digits) + '&limit=20' + (sendDealer() ? '&dealer=' + encodeURIComponent(sendDealer()) : ''))).customers || [];
+          found = found.concat(byCn.filter(c => c.consumerNo === digits));
+        }
       }
       if(my !== sendSearchReq) return;
       noteCustomers(found);
@@ -1086,13 +1092,14 @@ function sendSearchInput(){
       }
       if(mode === 'customers'){
         const have = new Set(recipients.map(r => r.no));
-        const add = found.filter(c => !have.has(c.no)).map(c => ({no:c.no, name:c.name, booking:'', address:c.address, dealer:c.dealer}));
+        const add = found.filter(c => !have.has(c.no)).map(c => ({no:c.no, name:c.name, booking:'', address:c.address, dealer:c.dealer, consumerNo:c.consumerNo || ''}));
         if(add.length){ recipients = recipients.concat(add); await ensureTokens(add); }
       }
       renderSendList();
     }catch(e){}
   }, 300);
 }
+function cnOf(r){ return (r && (r.consumerNo || (custCache.get(r.no) || {}).consumerNo)) || ''; }
 function visibleRecipients(){
   const el = document.getElementById('sendSearch');
   const q = (el ? el.value : '').trim().toLowerCase();
@@ -1101,6 +1108,7 @@ function visibleRecipients(){
   return recipients.filter(r =>
     (r.name || '').toLowerCase().includes(q) ||
     (digits && r.no.includes(digits)) ||
+    (digits && cnOf(r) === digits) ||
     (r.address || '').toLowerCase().includes(q) ||
     (r.dealer || '').toLowerCase().includes(q)
   );
@@ -1166,7 +1174,7 @@ function renderSendList(){
       ? '<span class="sent-yes">✓ Sent ' + new Date(when).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) + '</span>'
       : '<span class="sent-no">Not sent</span>');
     return `<tr>
-      <td>${esc(r.name || 'Customer')}</td>
+      <td>${esc(r.name || 'Customer')}${cnOf(r) ? '<div style="font-size:12px;color:#888;">Consumer no. ' + esc(cnOf(r)) + '</div>' : ''}</td>
       <td style="white-space:nowrap;">${fmtNo(r.no)}</td>
       <td>${esc(r.address && r.address !== 'Address pending' ? r.address : '—')}</td>
       <td>${esc(r.dealer || '—')}</td>
