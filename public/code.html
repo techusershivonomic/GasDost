@@ -4,10 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GasDost — Login code</title>
+<link rel="manifest" href="manifest-code.json">
 <meta name="theme-color" content="#c62828">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" href="icons/favicon-32.png">
 <script src="i18n.js"></script>
+<script src="install.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   *{box-sizing:border-box;}
@@ -33,6 +35,7 @@
 <header>
   <h1>⛽ GasDost</h1>
   <span data-lang-slot></span>
+  <button id="installBtn" class="install-btn" onclick="installApp()" title="Install on this phone">⬇ Install</button>
   <button class="out" id="outBtn" style="display:none;" onclick="logout()">Log out</button>
 </header>
 <main>
@@ -43,6 +46,7 @@
     <input type="text" id="pw" placeholder="MG-XXXX-XXXX" autocomplete="off" autocapitalize="characters" onkeydown="if(event.key==='Enter')login()">
     <button class="btn btn-primary" onclick="login()">Open</button>
     <div class="error" id="loginErr"></div>
+    <button class="install-btn install-big" onclick="installApp()">📲 Install on this phone</button>
   </div>
 
   <div class="card" id="codeCard" style="display:none;">
@@ -52,6 +56,7 @@
     <div id="qr"></div>
     <p class="hint">On his phone, in the GasDost app: tap <b>📷 Scan office QR</b> and point it at this screen — or type the <b>6-digit code</b>.</p>
     <button class="btn btn-ghost" onclick="getCode()">🔄 New code</button>
+    <button class="install-btn install-big" onclick="installApp()">📲 Install on this phone</button>
     <div class="error" id="codeErr"></div>
   </div>
 </main>
