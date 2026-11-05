@@ -3,7 +3,7 @@
   "name": "GasDost Login Code",
   "short_name": "GasDost Code",
   "description": "Shows the 6-digit login code and QR for delivery men's phones.",
-  "start_url": "/code",
+  "start_url": "/code?app=1",
   "scope": "/code",
   "display": "standalone",
   "orientation": "portrait-primary",

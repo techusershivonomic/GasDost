@@ -119,6 +119,24 @@ async function getCode(k){
   }
 }
 if(key()) getCode(); else show('login');
+
+/* On Android, a link to this page opened from the installed delivery app
+   stays inside that app's window, where nothing can be installed. Then the
+   install buttons open this page in Chrome instead. (When this page is its
+   own installed app, it is started with ?app=1.) */
+(function(){
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  let ownApp = /[?&]app=1/.test(location.search);
+  try{ if(ownApp) sessionStorage.setItem('gd_code_app', '1'); else ownApp = sessionStorage.getItem('gd_code_app') === '1'; }catch(e){}
+  if(!standalone || ownApp || !/android/i.test(navigator.userAgent)) return;
+  const open = () => { location.href = 'intent://' + location.host + '/code#Intent;scheme=https;package=com.android.chrome;end'; };
+  const fix = () => document.querySelectorAll('.install-btn').forEach(b => {
+    b.style.display = b.classList.contains('install-big') ? 'block' : 'inline-flex';
+    b.onclick = open;
+    if(b.classList.contains('install-big')) b.textContent = '📲 Open in Chrome to install';
+  });
+  fix(); setTimeout(fix, 500);
+})();
 </script>
 </body>
 </html>

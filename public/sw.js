@@ -1,4 +1,4 @@
-const CACHE = 'lmbg-delivery-v70'; // bump this on every future edit to force old installs to update
+const CACHE = 'lmbg-delivery-v71'; // bump this on every future edit to force old installs to update
 const APP_SHELL = [
   './app',
   './lm_delivery_app.html',
