@@ -154,8 +154,12 @@
   body.mv header{padding:10px 12px;flex-wrap:wrap;gap:8px;}
   body.mv header h1{font-size:16px;width:100%;}
   body.mv #installBtn{display:none !important;}
-  body.mv .tabbar{padding:0 8px;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;}
-  body.mv .tab-btn{white-space:nowrap;flex:0 0 auto;padding-left:10px;padding-right:10px;font-size:14px;}
+  /* All tabs visible at once: a 3-wide grid of small buttons, no sideways scrolling. */
+  body.mv .tabbar{padding:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+  body.mv .tab-btn{flex-direction:column;justify-content:center;gap:2px;padding:7px 4px;font-size:12.5px;line-height:1.2;text-align:center;
+    border:1px solid var(--border);border-radius:10px;background:#f7f9fc;white-space:normal;min-height:52px;}
+  body.mv .tab-btn.active{background:#e4efff;border-color:var(--blue);}
+  body.mv .tab-btn .count{font-size:10.5px;padding:0 6px;}
   body.mv main{padding:12px 10px 60px;}
   body.mv .tab-panel{grid-template-columns:1fr !important;gap:12px;}
   body.mv .card{padding:14px;border-radius:12px;}
@@ -178,7 +182,7 @@
 <header>
   <h1>⛽ GasDost — Admin</h1>
   <button class="badge mv-btn" id="mvBtn" onclick="toggleMobileView()" title="Switch between computer and phone layout">📱 Mobile view</button>
-  <span class="badge" id="buildBadge" title="Version of the office console" style="opacity:.85;">Build 68 · 5 Nov 2026</span>
+  <span class="badge" id="buildBadge" title="Version of the office console" style="opacity:.85;">Build 69 · 5 Nov 2026</span>
   <span style="flex:1;"></span>
   <label id="officeDealerWrap" style="display:none;align-items:center;gap:6px;color:#fff;font-size:12.5px;font-weight:600;margin-right:8px;" title="Dealership this computer works for. Every dealership filter starts from it.">🏪 This computer
     <select id="officeDealer" onchange="setOfficeDealer(this.value)" style="padding:5px 8px;border-radius:8px;border:none;font-size:12.5px;max-width:200px;"><option value="">All dealerships</option></select></label>
