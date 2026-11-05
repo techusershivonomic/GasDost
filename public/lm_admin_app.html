@@ -149,6 +149,7 @@
   .move-sel{padding:5px 6px;border-radius:8px;border:1px solid var(--border, #d6dbe3);font-size:13px;max-width:170px;}
   tr.unassigned td{color:var(--muted);font-style:italic;}
   .mgr-box{margin-top:14px;padding-top:12px;border-top:1px dashed var(--border);}
+  .mgr-box summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);list-style:revert;}
   .mv-btn{border:none;cursor:pointer;font-size:12.5px;}
   /* ---- Mobile view: the console on a phone ---- */
   body.mv header{padding:10px 12px;flex-wrap:wrap;gap:8px;}
@@ -182,7 +183,7 @@
 <header>
   <h1>⛽ GasDost — Admin</h1>
   <button class="badge mv-btn" id="mvBtn" onclick="toggleMobileView()" title="Switch between computer and phone layout">📱 Mobile view</button>
-  <span class="badge" id="buildBadge" title="Version of the office console" style="opacity:.85;">Build 69 · 5 Nov 2026</span>
+  <span class="badge" id="buildBadge" title="Version of the office console" style="opacity:.85;">Build 70 · 5 Nov 2026</span>
   <span style="flex:1;"></span>
   <label id="officeDealerWrap" style="display:none;align-items:center;gap:6px;color:#fff;font-size:12.5px;font-weight:600;margin-right:8px;" title="Dealership this computer works for. Every dealership filter starts from it.">🏪 This computer
     <select id="officeDealer" onchange="setOfficeDealer(this.value)" style="padding:5px 8px;border-radius:8px;border:none;font-size:12.5px;max-width:200px;"><option value="">All dealerships</option></select></label>
@@ -232,9 +233,9 @@
       <div class="warn-box" style="max-width:420px;">Show this only to your own delivery men. Anyone who scans it can see customer locations. Close it when you are done.</div>
       <button class="btn btn-ghost" onclick="document.getElementById('phoneQrWrap').style.display='none';document.getElementById('phoneQr').innerHTML='';">Close</button>
     </div>
-    <div class="mgr-box">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <b>👔 Manager in the field</b>
+    <details class="mgr-box" id="mgrDetails">
+      <summary>👔 Manager password</summary>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;">
         <span class="small" id="mgrStatus" style="margin:0;">—</span>
         <span style="flex:1;"></span>
         <button class="btn btn-ghost" style="padding:6px 12px;font-size:13px;" onclick="mgrNew()" id="mgrNewBtn">Create manager password</button>
@@ -242,7 +243,7 @@
       </div>
       <p class="small" style="margin:6px 0 0;">The manager opens <a id="mgrLink" href="code" target="_blank" rel="noopener"></a> on his phone with his own password. It shows only the login code and QR for delivery men — no customers, no office settings.</p>
       <div id="mgrNewKey" style="display:none;" class="warn-box"></div>
-    </div>
+    </details>
   </div>
   <div class="card" style="grid-column:1 / -1;">
     <div class="batch-header">
