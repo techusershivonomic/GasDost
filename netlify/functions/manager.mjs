@@ -5,12 +5,15 @@
 // The manager password can only do this one thing. Few tries per minute are
 // allowed, so it can't be guessed.
 
-import { managerOk, newPairCode, json } from "../lib/db.mjs";
+import { managerOk, newPairCode, roleOf, json } from "../lib/db.mjs";
 
 export default async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   try {
-    if (!(await managerOk(req.headers.get("x-gasdost-manager")))) {
+    const k = String(req.headers.get("x-gasdost-manager") || "").trim();
+    // The office password works here too.
+    const isOffice = [k, k.toUpperCase()].some((x) => roleOf({ headers: { get: () => x } }) === "admin");
+    if (!isOffice && !(await managerOk(k))) {
       return json({ error: "Wrong manager password. Ask the office for the right one." }, 401);
     }
     return json(await newPairCode());

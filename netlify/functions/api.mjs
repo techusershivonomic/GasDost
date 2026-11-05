@@ -314,7 +314,7 @@ export default async (req) => {
 
 export const config = {
   path: "/api/*",
-  excludedPath: ["/api/c/*", "/api/p/*"],
+  excludedPath: ["/api/c/*", "/api/p/*", "/api/m/*"],
   // 100 phones on one office Wi-Fi share an internet address; this leaves
   // plenty of room for them and still stops anyone guessing passwords.
   rateLimit: { windowLimit: 1500, windowSize: 60, aggregateBy: ["ip", "domain"] },
