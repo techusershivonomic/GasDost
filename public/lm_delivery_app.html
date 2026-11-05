@@ -576,7 +576,7 @@
    Shown on the Dashboard so there is never any doubt about which version a
    phone is actually running. If this doesn't match the latest, the device is
    on a stale copy and needs a proper reload. */
-const BUILD = 'Build 66 \u00b7 28 Oct 2026';
+const BUILD = 'Build 68 \u00b7 5 Nov 2026';
 window.addEventListener('load', ()=>{
   const el = document.getElementById('buildTag');
   if(el) el.textContent = BUILD;
@@ -2639,6 +2639,13 @@ async function staffApi(path, opts){
 // Setup QR from the office: #staff=<key>. Works whether the app was closed
 // (fresh load) or already open in that tab (only the # part changes).
 function takeStaffKey(){
+  // The manager's /code page QR carries a 6-digit code instead of the key.
+  const pc = location.hash.match(/[#&]pair=(\d{6})/);
+  if(pc){
+    history.replaceState(null, '', location.pathname);
+    claimCodeValue(pc[1]).then(e => { if(e) setTimeout(() => toast(e), 800); });
+    return;
+  }
   const m = location.hash.match(/[#&]staff=([^&]+)/);
   if(!m) return;
   history.replaceState(null, '', location.pathname);
@@ -2688,12 +2695,18 @@ async function claimPairCode(){
   const code = (inp.value || '').replace(/\D/g, '');
   err.textContent = '';
   if(code.length !== 6){ err.textContent = 'Enter the 6-digit code from the office screen.'; return; }
+  const e = await claimCodeValue(code);
+  if(e) err.textContent = e;
+}
+// Turns a 6-digit code into the office connection. Returns an error message, or '' when connected.
+async function claimCodeValue(code){
   try{
     const r = await fetch('/api/p/claim', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({code})});
     const d = await r.json().catch(() => ({}));
-    if(!r.ok || !d.key){ err.textContent = d.error || 'That code did not work. Ask the office for a new one.'; return; }
+    if(!r.ok || !d.key) return d.error || 'That code did not work. Ask the office for a new one.';
     applyStaffKey(d.key);
-  }catch(e){ err.textContent = 'No internet. Try again when online.'; }
+    return '';
+  }catch(e){ return 'No internet. Try again when online.'; }
 }
 let pairScanner = null;
 function startPairScan(){
@@ -2703,6 +2716,12 @@ function startPairScan(){
   if(typeof QrScanner === 'undefined' || !navigator.mediaDevices){ err.textContent = 'Camera not available here. Type the 6-digit code instead.'; return; }
   pairScanner = new QrScanner(document.getElementById('pairVideo'), res => {
     const text = typeof res === 'string' ? res : res.data;
+    const pc = /[#&]pair=(\d{6})/.exec(text || '');
+    if(pc){
+      stopPairScan();
+      claimCodeValue(pc[1]).then(e => { if(e){ const pe = document.getElementById('pairErr'); if(pe) pe.textContent = e; toast(e); } });
+      return;
+    }
     const m = /[#&]staff=([^&\s]+)/.exec(text || '');
     if(!m){ err.textContent = 'That is not the office setup QR. Ask the office for "Show setup QR code".'; return; }
     stopPairScan();

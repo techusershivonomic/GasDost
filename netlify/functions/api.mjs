@@ -5,6 +5,7 @@
 //
 //   GET    /api/whoami                         which key is this?
 //   POST   /api/pair-code                      6-digit phone setup code (10 minutes)     (admin)
+//   GET/POST /api/manager-key                 field manager's /code page password       (admin)
 //   GET    /api/staff-key                      key for the phone setup QR                 (admin)
 //   POST   /api/import-old                     one-time move from the old storage         (admin)
 //
@@ -52,6 +53,7 @@ import {
   searchCustomers, upsertCustomers, deleteCustomer, deleteCustomers, findDuplicates, cleanDuplicates, restoreCustomers, listBin, deleteLog, checkPin, changePin, addMissing, listMissing, fixMissing, missingFilled, deleteMissing, clearMissing, deleteAllCustomers, lookupCustomers, ensureTokens,
   newBookings, applyOps, syncForPhone, listBookings, statusSummary, bookingsBehind, deliveryHistory, customerDeliveries, listDealers, dealerSummary, linkTracker, trackerList,
   listCancellations, ncStock, ncStockFor, ncMoveStock, ncStockLog, ncCreate, ncList, ncPhoto, ncSetStatus, ncCash,
+  newManagerKey, managerKeyInfo, managerKeyOff,
   pingTeam, newPairCode, listTeam, deleteTeam, logoutTeam, removeTeam, teamNames, logoutAtFor, getMeta, setMeta, importOld,
 } from "../lib/db.mjs";
 
@@ -89,6 +91,14 @@ export default async (req) => {
     if (what === "pair-code" && m === "POST") {
       if (!isAdmin) return adminOnly();
       return json(await newPairCode());
+    }
+
+    // Password for the field manager's /code page (only gives out setup codes).
+    if (what === "manager-key") {
+      if (!isAdmin) return adminOnly();
+      if (m === "POST" && body.action === "new") return json({ key: await newManagerKey(), ...(await managerKeyInfo()) });
+      if (m === "POST" && body.action === "off") { await managerKeyOff(); return json({ set: false }); }
+      return json(await managerKeyInfo());
     }
 
     if (what === "staff-key" && m === "GET") {

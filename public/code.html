@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GasDost — Login code</title>
+<meta name="theme-color" content="#c62828">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/favicon-32.png">
+<script src="i18n.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:#f4f6f9;color:#1c2530;}
+  header{background:linear-gradient(135deg,#c62828,#9b1919);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px;}
+  header h1{font-size:17px;margin:0;font-weight:700;flex:1;}
+  main{max-width:440px;margin:0 auto;padding:16px;}
+  .card{background:#fff;border:1px solid #e2e6ec;border-radius:16px;padding:20px;text-align:center;}
+  .code{font-size:52px;font-weight:900;letter-spacing:6px;color:#c62828;margin:6px 0 2px;font-variant-numeric:tabular-nums;}
+  .left{font-size:14px;color:#6b7684;margin-bottom:14px;}
+  #qr{display:flex;justify-content:center;margin:8px 0 6px;}
+  #qr img,#qr canvas{border:10px solid #fff;border-radius:8px;}
+  .hint{font-size:13.5px;color:#6b7684;line-height:1.45;margin:10px 0 0;}
+  input{width:100%;font-size:20px;padding:12px;border:1px solid #d6dbe3;border-radius:10px;text-align:center;letter-spacing:2px;text-transform:uppercase;}
+  .btn{display:block;width:100%;padding:13px;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;margin-top:12px;}
+  .btn-primary{background:#c62828;color:#fff;}
+  .btn-ghost{background:#eef1f5;color:#1c2530;}
+  .error{color:#d33;font-size:14px;margin-top:10px;min-height:1em;}
+  .out{background:none;border:1px solid rgba(255,255,255,.5);color:#fff;border-radius:8px;padding:5px 10px;font-size:12.5px;cursor:pointer;}
+</style>
+</head>
+<body>
+<header>
+  <h1>⛽ GasDost</h1>
+  <span data-lang-slot></span>
+  <button class="out" id="outBtn" style="display:none;" onclick="logout()">Log out</button>
+</header>
+<main>
+  <div class="card" id="loginCard" style="display:none;">
+    <div style="font-size:40px;">👔</div>
+    <h2 style="margin:6px 0 4px;font-size:19px;">Manager login</h2>
+    <p class="hint" style="margin:0 0 14px;">Type the manager password the office gave you.</p>
+    <input type="text" id="pw" placeholder="MG-XXXX-XXXX" autocomplete="off" autocapitalize="characters" onkeydown="if(event.key==='Enter')login()">
+    <button class="btn btn-primary" onclick="login()">Open</button>
+    <div class="error" id="loginErr"></div>
+  </div>
+
+  <div class="card" id="codeCard" style="display:none;">
+    <div style="font-size:14px;font-weight:700;color:#6b7684;">Delivery man login code</div>
+    <div class="code" id="code" data-noi18n>— — —</div>
+    <div class="left" id="left"></div>
+    <div id="qr"></div>
+    <p class="hint">On his phone, in the GasDost app: tap <b>📷 Scan office QR</b> and point it at this screen — or type the <b>6-digit code</b>.</p>
+    <button class="btn btn-ghost" onclick="getCode()">🔄 New code</button>
+    <div class="error" id="codeErr"></div>
+  </div>
+</main>
+
+<script>
+const MGR_STORE = 'gd_manager_key_v1';
+let timer = null;
+const key = () => { try{ return localStorage.getItem(MGR_STORE) || ''; }catch(e){ return ''; } };
+
+function show(which){
+  document.getElementById('loginCard').style.display = which === 'login' ? 'block' : 'none';
+  document.getElementById('codeCard').style.display = which === 'code' ? 'block' : 'none';
+  document.getElementById('outBtn').style.display = which === 'code' ? 'inline-block' : 'none';
+}
+async function login(){
+  const v = document.getElementById('pw').value.trim().toUpperCase();
+  const err = document.getElementById('loginErr');
+  err.textContent = '';
+  if(!v){ err.textContent = 'Type the password first.'; return; }
+  try{ localStorage.setItem(MGR_STORE, v); }catch(e){}
+  const ok = await getCode(v);
+  if(!ok){ try{ localStorage.removeItem(MGR_STORE); }catch(e){} }
+}
+function logout(){
+  try{ localStorage.removeItem(MGR_STORE); }catch(e){}
+  clearInterval(timer);
+  document.getElementById('pw').value = '';
+  show('login');
+}
+async function getCode(k){
+  k = k || key();
+  const err = document.getElementById(k === key() && document.getElementById('codeCard').style.display === 'block' ? 'codeErr' : 'loginErr');
+  clearInterval(timer);
+  try{
+    const r = await fetch('/api/m/code', {method:'POST', headers:{'x-gasdost-manager': k}});
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok || !d.code){
+      if(r.status === 401){ try{ localStorage.removeItem(MGR_STORE); }catch(e){} show('login'); document.getElementById('loginErr').textContent = d.error || 'Wrong manager password.'; }
+      else err.textContent = d.error || 'Could not get a code. Try again.';
+      return false;
+    }
+    show('code');
+    document.getElementById('codeErr').textContent = '';
+    document.getElementById('code').textContent = d.code.slice(0,3) + ' ' + d.code.slice(3);
+    const box = document.getElementById('qr');
+    box.innerHTML = '';
+    try{ new QRCode(box, {text: location.origin + '/app#pair=' + d.code, width:220, height:220, correctLevel: QRCode.CorrectLevel.M}); }
+    catch(e){ box.innerHTML = '<div class="hint">QR not available — type the code.</div>'; }
+    const tick = () => {
+      const left = Math.max(0, Math.round((d.expiresAt - Date.now()) / 1000));
+      if(!left){ getCode(); return; }
+      document.getElementById('left').textContent = 'Works for ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') + ' more';
+    };
+    tick(); timer = setInterval(tick, 1000);
+    return true;
+  }catch(e){
+    err.textContent = 'No internet. Try again when online.';
+    if(document.getElementById('codeCard').style.display !== 'block') show('login');
+    return false;
+  }
+}
+if(key()) getCode(); else show('login');
+</script>
+</body>
+</html>

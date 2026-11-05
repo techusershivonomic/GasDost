@@ -964,6 +964,30 @@ export async function newPairCode() {
           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`;
   return { code, expiresAt };
 }
+/* ---------------- manager code page ----------------
+   A field manager opens /code on his phone with his own password. It only
+   ever gives out 6-digit phone setup codes — never the office password, the
+   phone key or any customer data. Only a hash of his password is stored. */
+const mgrHash = (k) => createHash("sha256").update("gasdost-manager:" + k).digest("hex");
+export async function newManagerKey() {
+  const raw = randomBytes(9).toString("base64").replace(/[^A-Za-z0-9]/g, "").toUpperCase().replace(/[O0I1L]/g, "");
+  const key = "MG-" + (raw + "XKQZ7P9R").slice(0, 4) + "-" + (raw + "XKQZ7P9R").slice(4, 8);
+  await setMeta("manager_key", JSON.stringify({ hash: mgrHash(key), at: new Date().toISOString() }));
+  return key;
+}
+export async function managerKeyInfo() {
+  try { const m = JSON.parse((await getMeta("manager_key")) || "null"); return m ? { set: true, at: m.at } : { set: false }; }
+  catch (e) { return { set: false }; }
+}
+export async function managerKeyOff() { await q`DELETE FROM meta WHERE key = 'manager_key'`; }
+export async function managerOk(key) {
+  key = String(key || "").trim().toUpperCase();
+  if (!key) return false;
+  try {
+    const m = JSON.parse((await getMeta("manager_key")) || "null");
+    return !!(m && m.hash && safeEqual(mgrHash(key), m.hash));
+  } catch (e) { return false; }
+}
 export async function claimPairCode(code) {
   const [row] = await q`SELECT value FROM meta WHERE key = ${"pair:" + code}`;
   if (!row || Number(row.value) < Date.now()) return null;

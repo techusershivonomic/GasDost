@@ -33,3 +33,7 @@
   from = "/admin"
   to = "/office"
   status = 301
+[[redirects]]
+  from = "/code"
+  to = "/code.html"
+  status = 200
