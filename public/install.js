@@ -8,7 +8,16 @@
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   let deferred = null;
 
+  const isAndroid = /android/i.test(navigator.userAgent);
   function show(on){ btns().forEach(b => { b.style.display = on && !isStandalone() ? (b.classList.contains('install-big') ? 'block' : 'inline-flex') : 'none'; }); }
+  // Buttons marked data-always show on Android even before Chrome offers its
+  // own prompt; tapping then shows the menu steps instead.
+  function showAlways(){
+    if(!isAndroid || isStandalone()) return;
+    document.querySelectorAll('.install-btn[data-always]').forEach(b => { b.style.display = b.classList.contains('install-big') ? 'block' : 'inline-flex'; });
+  }
+  document.addEventListener('DOMContentLoaded', showAlways);
+  if(document.readyState !== 'loading') showAlways();
 
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; show(true); });
   window.addEventListener('appinstalled', () => { deferred = null; show(false); note('✅ Installed — open GasDost from your home screen.'); });
@@ -17,12 +26,23 @@
 
   function note(t){ if(typeof toast === 'function') toast(t); }
 
-  function iosGuide(){
+  function iosGuide(android){
+    const old = document.getElementById('installGuide');
+    if(old && old.dataset.kind !== (android ? 'a' : 'i')) old.remove();
     let m = document.getElementById('installGuide');
     if(!m){
       m = document.createElement('div');
       m.id = 'installGuide';
-      m.innerHTML = `
+      m.dataset.kind = android ? 'a' : 'i';
+      m.innerHTML = android ? `
+        <div class="ig-card" role="dialog" aria-label="Install GasDost">
+          <div class="ig-title">📲 Install GasDost</div>
+          <div class="ig-step"><span class="ig-n">1</span><span>Tap the <b>⋮</b> menu at the top right of Chrome</span></div>
+          <div class="ig-step"><span class="ig-n">2</span><span>Tap <b>Add to Home screen</b> (or <b>Install app</b>)</span></div>
+          <div class="ig-step"><span class="ig-n">3</span><span>Tap <b>Install</b>. GasDost appears on your home screen.</span></div>
+          <div class="ig-hint">Open this page in <b>Chrome</b> for this to work.</div>
+          <button class="ig-ok" type="button">OK</button>
+        </div>` : `
         <div class="ig-card" role="dialog" aria-label="Install GasDost">
           <div class="ig-title">📲 Install GasDost</div>
           <div class="ig-step"><span class="ig-n">1</span><span>Tap the <b>Share</b> button <span class="ig-icon">⬆️</span> at the bottom of Safari</span></div>
@@ -44,6 +64,7 @@
       return;
     }
     if(isIOS){ iosGuide(); return; }
+    if(isAndroid){ iosGuide(true); return; }
     note('Use the browser menu ⋮ → "Install app" / "Add to Home screen".');
   };
 
